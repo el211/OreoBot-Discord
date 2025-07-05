@@ -1,0 +1,18 @@
+# binaries / build output
+bot.bin
+bot/discord-bot
+discord-bot
+discord-bot_BACKUP
+*.exe
+
+# runtime data
+data/
+*.db
+
+# IDE
+.idea/
+.vscode/
+
+# OS
+.DS_Store
+Thumbs.db
