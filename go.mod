@@ -1,0 +1,40 @@
+module discord-bot
+
+go 1.24.0
+
+replace github.com/bwmarrin/discordgo => github.com/yeongaori/discordgo-fork v0.0.0-20260316044635-6e7c94f657fb
+
+require (
+	github.com/bwmarrin/discordgo v0.29.1-0.20251229161010-9f6aa8159fc6
+	github.com/gorilla/websocket v1.5.3
+	github.com/jonas747/ogg v0.0.0-20161220051205-b4f6f4cf3757
+	github.com/rabbitmq/amqp091-go v1.10.0
+	go.mongodb.org/mongo-driver/v2 v2.5.0
+	gopkg.in/yaml.v3 v3.0.1
+	modernc.org/sqlite v1.29.1
+)
+
+require (
+	github.com/cloudflare/circl v1.6.3 // indirect
+	github.com/dustin/go-humanize v1.0.1 // indirect
+	github.com/google/uuid v1.3.0 // indirect
+	github.com/hashicorp/golang-lru/v2 v2.0.7 // indirect
+	github.com/klauspost/compress v1.17.6 // indirect
+	github.com/mattn/go-isatty v0.0.16 // indirect
+	github.com/ncruces/go-strftime v0.1.9 // indirect
+	github.com/remyoudompheng/bigfft v0.0.0-20230129092748-24d4a6f8daec // indirect
+	github.com/xdg-go/pbkdf2 v1.0.0 // indirect
+	github.com/xdg-go/scram v1.2.0 // indirect
+	github.com/xdg-go/stringprep v1.0.4 // indirect
+	github.com/youmark/pkcs8 v0.0.0-20240726163527-a2c0da244d78 // indirect
+	golang.org/x/crypto v0.33.0 // indirect
+	golang.org/x/sync v0.11.0 // indirect
+	golang.org/x/sys v0.41.0 // indirect
+	golang.org/x/text v0.22.0 // indirect
+	modernc.org/gc/v3 v3.0.0-20240107210532-573471604cb6 // indirect
+	modernc.org/libc v1.41.0 // indirect
+	modernc.org/mathutil v1.6.0 // indirect
+	modernc.org/memory v1.7.2 // indirect
+	modernc.org/strutil v1.2.0 // indirect
+	modernc.org/token v1.1.0 // indirect
+)
