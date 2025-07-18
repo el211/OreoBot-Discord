@@ -96,3 +96,101 @@ type StripePaymentConfig struct {
 	Currency       string  `json:"currency"`
 	// SuccessURL and CancelURL are the redirect URLs after Stripe checkout.
 	SuccessURL           string                     `json:"success_url"`
+	CancelURL            string                     `json:"cancel_url"`
+	PaymentNotifications PaymentNotificationsConfig `json:"payment_notifications"`
+}
+
+type CoinbasePaymentConfig struct {
+	Enabled              bool                       `json:"enabled"`
+	Name                 string                     `json:"name"`
+	ButtonLabel          string                     `json:"button_label"`
+	APIKey               string                     `json:"api_key"`
+	HandlingFee          float64                    `json:"handling_fee"`
+	Currency             string                     `json:"currency"`
+	PaymentNotifications PaymentNotificationsConfig `json:"payment_notifications"`
+}
+
+// WebhookServerConfig configures the optional HTTP server for receiving payment events.
+type WebhookServerConfig struct {
+	// Enabled starts the HTTP server to receive webhook events.
+	Enabled bool `json:"enabled"`
+	// Port the server listens on (e.g. 8080).
+	Port int `json:"port"`
+	// APIURL is the public base URL of this server (e.g. "https://api.example.com").
+	// Used to tell you where to point PayPal/Stripe/Coinbase webhook settings.
+	APIURL string `json:"api_url"`
+}
+
+// VerifyConfig maps product names to Discord role IDs for the /verify command.
+type VerifyConfig struct {
+	// Products is the list of purchasable products and their associated role.
+	Products []VerifyProduct `json:"products"`
+}
+
+// VerifyProduct pairs a product name (shown in autocomplete) with the role to assign.
+type VerifyProduct struct {
+	// Name is the display name shown in the /verify autocomplete list (e.g. "ModeledNPCs").
+	Name string `json:"name"`
+
+	// RoleID is the Discord role ID to grant when this product is verified.
+	RoleID string `json:"role_id"`
+}
+
+// CustomCommandConfig defines a user-created slash command that replies with a fixed message.
+type CustomCommandConfig struct {
+	// Name of the slash command (no spaces, lowercase).
+	Name string `json:"name"`
+
+	// Description shown in Discord's command picker.
+	Description string `json:"description"`
+
+	// Message sent when the command is used. Supports Discord markdown.
+	Message string `json:"message"`
+
+	// Ephemeral: if true, only the user who ran the command sees the reply.
+	Ephemeral bool `json:"ephemeral"`
+}
+
+// NoPingConfig prevents certain roles from being mentioned.
+type NoPingConfig struct {
+	// Enable the no-ping rule.
+	Enabled bool `json:"enabled"`
+
+	// ProtectedRoles is a list of role IDs that must not be pinged.
+	ProtectedRoles []string `json:"protected_roles"`
+
+	// BypassRoles is a list of role IDs that are allowed to ping protected roles.
+	// Members with any of these roles are exempt from the no-ping restriction.
+	BypassRoles []string `json:"bypass_roles"`
+
+	// Message sent to the user when they ping a protected role.
+	// Use {user} for the offender's mention and {role} for the pinged role name.
+	Message string `json:"message"`
+
+	// DeleteMessage: delete the offending message (default true).
+	DeleteMessage bool `json:"delete_message"`
+}
+
+// LinkFilterConfig auto-deletes messages containing links, except for
+// members with an allowed role or links to whitelisted domains.
+type LinkFilterConfig struct {
+	// Enable the link filter.
+	Enabled bool `json:"enabled"`
+
+	// AllowedRoles is a list of role IDs whose members may post any link.
+	AllowedRoles []string `json:"allowed_roles"`
+
+	// WhitelistDomains is a list of domains that are always allowed for everyone,
+	// e.g. ["github.com", "youtube.com"]. Subdomains are matched too
+	// (whitelisting "github.com" also allows "gist.github.com").
+	WhitelistDomains []string `json:"whitelist_domains"`
+
+	// BlockInvites always blocks Discord invite links (discord.gg / discord.com/invite)
+	// even if discord.com is whitelisted. Default true.
+	BlockInvites bool `json:"block_invites"`
+
+	// DeleteMessage: delete the offending message (default true).
+	DeleteMessage bool `json:"delete_message"`
+
+	// Message sent to the user when their message is removed.
+	// Use {user} for the offender's mention. A default is used if empty.
