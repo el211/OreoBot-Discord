@@ -194,3 +194,101 @@ type LinkFilterConfig struct {
 
 	// Message sent to the user when their message is removed.
 	// Use {user} for the offender's mention. A default is used if empty.
+	Message string `json:"message"`
+}
+
+// UnmarshalJSON decodes LinkFilterConfig with DeleteMessage and BlockInvites
+// defaulting to true when the keys are omitted, while still honouring an
+// explicit "false" in the config file.
+func (c *LinkFilterConfig) UnmarshalJSON(data []byte) error {
+	type alias LinkFilterConfig
+	tmp := alias{DeleteMessage: true, BlockInvites: true}
+	if err := json.Unmarshal(data, &tmp); err != nil {
+		return err
+	}
+	*c = LinkFilterConfig(tmp)
+	return nil
+}
+
+// CountingGameConfig configures the counting minigame channel.
+type CountingGameConfig struct {
+	// Enable the counting game.
+	Enabled bool `json:"enabled"`
+
+	// Discord channel ID where the game takes place.
+	ChannelID string `json:"channel_id"`
+
+	// FailResets: if true, a wrong number resets the count back to 0.
+	// If false, the wrong message is simply deleted and the count stays.
+	FailResets bool `json:"fail_resets"`
+
+	// DeleteWrong: delete messages that contain the wrong number (default true).
+	// Set to false to only warn without deleting.
+	DeleteWrong bool `json:"delete_wrong"`
+
+	// DeleteNonNumbers: delete messages that are not numbers at all (keeps the channel clean).
+	DeleteNonNumbers bool `json:"delete_non_numbers"`
+}
+
+// ChatBridgeConfig wires up a bidirectional Minecraft ↔ Discord chat bridge
+// via RabbitMQ (the same fanout exchange used by OreoEssentials ChatSyncManager).
+type ChatBridgeConfig struct {
+	// Enable the bridge. Everything below is ignored when false.
+	Enabled bool `json:"enabled"`
+
+	// RabbitMQ connection URI, e.g. "amqp://user:pass@host:5672/"
+	// Leave empty to disable the bridge even if Enabled is true.
+	RabbitMQURI string `json:"rabbitmq_uri"`
+
+	// Discord channel ID where MC chat is relayed and Discord users can chat back.
+	ChannelID string `json:"channel_id"`
+
+	// (Optional) OreoEssentials channel ID to target when channels mode is active.
+	// Leave empty if your servers run without the channels system — legacy format is used instead.
+	MCChannelID string `json:"mc_channel_id"`
+
+	// BanSync: when true, banning a linked user from Discord also bans them in Minecraft via RCON.
+	// Requires Minecraft.Enabled and a working RCON connection.
+	BanSync bool `json:"ban_sync"`
+
+	// ModSync: when true, /mute and /unmute on a linked user also mutes/unmutes them
+	// on all Minecraft servers via RabbitMQ (CTRL;;MUTE / CTRL;;UNMUTE).
+	ModSync bool `json:"mod_sync"`
+}
+
+type DiscordConfig struct {
+	Token   string `json:"token"`
+	GuildID string `json:"guild_id"`
+	Prefix  string `json:"prefix"`
+}
+
+type YouTubeConfig struct {
+	APIKey string `json:"api_key"`
+}
+
+type DatabaseConfig struct {
+	Driver  string        `json:"driver"`
+	SQLite  SQLiteConfig  `json:"sqlite"`
+	MongoDB MongoDBConfig `json:"mongodb"`
+}
+
+type SQLiteConfig struct {
+	Path string `json:"path"`
+}
+
+type MongoDBConfig struct {
+	URI      string `json:"uri"`
+	Database string `json:"database"`
+}
+
+type MinecraftConfig struct {
+	Enabled      bool   `json:"enabled"`
+	RCONAddress  string `json:"rcon_ip"`
+	RCONPort     int    `json:"rcon_port"`
+	RCONPassword string `json:"rcon_password"`
+
+	LinkBackend string `json:"link_backend"`
+}
+
+type PermissionsConfig struct {
+	AdminRoles     []string `json:"admin_roles"`
