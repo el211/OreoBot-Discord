@@ -292,3 +292,100 @@ type MinecraftConfig struct {
 
 type PermissionsConfig struct {
 	AdminRoles     []string `json:"admin_roles"`
+	ModeratorRoles []string `json:"moderator_roles"`
+	DJRoles        []string `json:"dj_roles"`
+}
+
+type MusicConfig struct {
+	Enabled         bool   `json:"enabled"`
+	Backend         string `json:"backend"`
+	MaxQueueSize    int    `json:"max_queue_size"`
+	MaxSongDuration int    `json:"max_song_duration"`
+	AllowPlaylists  bool   `json:"allow_playlists"`
+	DefaultVolume   int    `json:"default_volume"`
+
+	Direct   DirectMusicConfig   `json:"direct"`
+	Lavalink LavalinkMusicConfig `json:"lavalink"`
+}
+
+type DirectMusicConfig struct {
+	YTDLPPath  string `json:"ytdlp_path"`
+	FFmpegPath string `json:"ffmpeg_path"`
+}
+
+type LavalinkMusicConfig struct {
+	Host     string `json:"host"`
+	Port     int    `json:"port"`
+	Password string `json:"password"`
+	Secure   bool   `json:"secure"`
+}
+
+type ModerationConfig struct {
+	ModLogChannel string        `json:"mod_log_channel"`
+	MuteRole      string        `json:"mute_role"`
+	AutoMod       AutoModConfig `json:"auto_mod"`
+}
+
+type WelcomeLeaveConfig struct {
+	Enabled   bool        `json:"enabled"`
+	ChannelID string      `json:"channel_id"`
+	Embed     EmbedConfig `json:"embed"`
+}
+
+type EmbedConfig struct {
+	Colour       string `json:"colour"`
+	Title        string `json:"title"`
+	Message      string `json:"message"`
+	Thumbnail    string `json:"thumbnail"`
+	ImageEnabled bool   `json:"image_enabled"`
+	ImageURL     string `json:"image_url"`
+}
+
+type AutoModConfig struct {
+	Enabled         bool `json:"enabled"`
+	MaxMentions     int  `json:"max_mentions"`
+	MaxLines        int  `json:"max_lines"`
+	AntiSpamSeconds int  `json:"anti_spam_seconds"`
+	AntiSpamCount   int  `json:"anti_spam_count"`
+}
+
+type TicketsConfig struct {
+	Enabled         bool             `json:"enabled"`
+	PanelChannel    string           `json:"panel_channel"`
+	LogChannel      string           `json:"log_channel"`
+	StaffRoles      string           `json:"staff_roles"`
+	DiscordCategory string           `json:"discord_category"`
+	MaxOpenPerUser  int              `json:"max_open_per_user"`
+	Categories      []TicketCategory `json:"categories"`
+}
+
+type TicketCategory struct {
+	ID            string              `json:"id"`
+	Name          string              `json:"name"`
+	Emoji         string              `json:"emoji"`
+	Description   string              `json:"description"`
+	StaffRoles    string              `json:"staff_role"`
+	Subcategories []TicketSubcategory `json:"subcategories"`
+}
+
+type TicketSubcategory struct {
+	ID          string `json:"id"`
+	Name        string `json:"name"`
+	Emoji       string `json:"emoji"`
+	Description string `json:"description"`
+}
+
+// ──────────────────────────────────────────
+// Commissions system
+// ──────────────────────────────────────────
+
+type CommissionsConfig struct {
+	Enabled         bool                `json:"enabled"`
+	PanelChannel    string              `json:"panel_channel"`
+	LogChannel      string              `json:"log_channel"`
+	StaffRoles      string              `json:"staff_roles"`
+	DiscordCategory string              `json:"discord_category"`
+	PayPalEmail     string              `json:"paypal_email"`
+	PayPalMeUser    string              `json:"paypal_me_user"`
+	Services        []CommissionService `json:"services"`
+}
