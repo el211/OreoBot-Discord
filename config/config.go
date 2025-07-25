@@ -389,3 +389,102 @@ type CommissionsConfig struct {
 	PayPalMeUser    string              `json:"paypal_me_user"`
 	Services        []CommissionService `json:"services"`
 }
+
+type CommissionService struct {
+	ID            string `json:"id"`
+	Name          string `json:"name"`
+	Emoji         string `json:"emoji"`
+	Description   string `json:"description"`
+	StartingPrice string `json:"starting_price,omitempty"`
+}
+
+type CommissionTicket struct {
+	ChannelID            string                     `json:"channel_id"`
+	UserID               string                     `json:"user_id"`
+	ServiceID            string                     `json:"service_id"`
+	ServiceName          string                     `json:"service_name"`
+	Details              string                     `json:"details"`
+	Budget               string                     `json:"budget"`
+	Timeline             string                     `json:"timeline"`
+	Notes                string                     `json:"notes"`
+	Number               int                        `json:"number"`
+	CreatedAt            string                     `json:"created_at"`
+	LogChannelID         string                     `json:"log_channel_id,omitempty"`
+	LogMessageID         string                     `json:"log_message_id,omitempty"`
+	DiscussionThreadID   string                     `json:"discussion_thread_id,omitempty"`
+	AcceptedFreelancerID string                     `json:"accepted_freelancer_id,omitempty"`
+	ClientThreadMessages map[string]string          `json:"client_thread_messages,omitempty"`
+	Quotes               map[string]CommissionQuote `json:"quotes,omitempty"`
+}
+
+type CommissionQuote struct {
+	ID           string  `json:"id"`
+	FreelancerID string  `json:"freelancer_id"`
+	Amount       float64 `json:"amount"`
+	Currency     string  `json:"currency"`
+	Timeline     string  `json:"timeline"`
+	Message      string  `json:"message"`
+	Status       string  `json:"status"`
+	Reason       string  `json:"reason,omitempty"`
+	CreatedAt    string  `json:"created_at"`
+}
+
+type CommissionInvoice struct {
+	Number      int     `json:"number"`
+	ChannelID   string  `json:"channel_id"`
+	GuildID     string  `json:"guild_id"`
+	ClientID    string  `json:"client_id"`
+	CreatedBy   string  `json:"created_by"`
+	Amount      float64 `json:"amount"`
+	Currency    string  `json:"currency"`
+	Description string  `json:"description"`
+	Note        string  `json:"note"`
+	CreatedAt   string  `json:"created_at"`
+	Paid        bool    `json:"paid"`
+	// Payment gateway tracking
+	PayPalInvoiceID   string `json:"paypal_invoice_id,omitempty"`
+	PayPalPayerURL    string `json:"paypal_payer_url,omitempty"`
+	StripeSessionID   string `json:"stripe_session_id,omitempty"`
+	StripePaymentURL  string `json:"stripe_payment_url,omitempty"`
+	CoinbaseChargeID  string `json:"coinbase_charge_id,omitempty"`
+	CoinbaseHostedURL string `json:"coinbase_hosted_url,omitempty"`
+}
+
+type CommissionsRuntime struct {
+	Enabled                 bool                        `json:"enabled"`
+	PanelChannelOverride    string                      `json:"panel_channel_override,omitempty"`
+	LogChannelOverride      string                      `json:"log_channel_override,omitempty"`
+	StaffRolesOverride      string                      `json:"staff_roles_override,omitempty"`
+	DiscordCategoryOverride string                      `json:"discord_category_override,omitempty"`
+	PayPalEmail             string                      `json:"paypal_email,omitempty"`
+	PayPalMeUser            string                      `json:"paypal_me_user,omitempty"`
+	PanelMessageID          string                      `json:"panel_message_id,omitempty"`
+	CommissionCounter       int                         `json:"commission_counter"`
+	InvoiceCounter          int                         `json:"invoice_counter"`
+	Services                []CommissionService         `json:"services"`
+	OpenCommissions         map[string]CommissionTicket `json:"open_commissions"`
+	Invoices                []CommissionInvoice         `json:"invoices"`
+}
+
+type GitHubSubscription struct {
+	Repo      string   `json:"repo"`       // "owner/repo" lowercase
+	ChannelID string   `json:"channel_id"` // Discord channel ID
+	Events    []string `json:"events"`     // e.g. ["push","pull_request"]
+}
+
+type GitHubConfig struct {
+	Enabled       bool                 `json:"enabled"`
+	WebhookSecret string               `json:"webhook_secret"`
+	WebhookPort   int                  `json:"webhook_port"`
+	Subscriptions []GitHubSubscription `json:"subscriptions"`
+}
+
+type AutoRoleState struct {
+	Enabled bool   `json:"enabled"`
+	RoleID  string `json:"role_id"`
+}
+
+type RoleMenu struct {
+	ID           string          `json:"id"`
+	Title        string          `json:"title"`
+	Description  string          `json:"description"`
