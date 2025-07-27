@@ -488,3 +488,101 @@ type RoleMenu struct {
 	ID           string          `json:"id"`
 	Title        string          `json:"title"`
 	Description  string          `json:"description"`
+	ChannelID    string          `json:"channel_id"`
+	MessageID    string          `json:"message_id"`
+	SingleSelect bool            `json:"single_select"`
+	Roles        []RoleMenuEntry `json:"roles"`
+}
+
+type RoleMenuEntry struct {
+	RoleID string `json:"role_id"`
+	Label  string `json:"label"`
+	Emoji  string `json:"emoji"`
+}
+
+type Giveaway struct {
+	ID         string          `json:"id"`
+	GuildID    string          `json:"guild_id"`
+	ChannelID  string          `json:"channel_id"`
+	MessageID  string          `json:"message_id"`
+	Prize      string          `json:"prize"`
+	Winners    int             `json:"winners"`
+	EndsAt     string          `json:"ends_at"` // RFC3339
+	HostID     string          `json:"host_id"`
+	Ended      bool            `json:"ended"`
+	WinnerIDs  []string        `json:"winner_ids"`
+	EntrantIDs map[string]bool `json:"entrant_ids"`
+}
+
+type NoPingRuntime struct {
+	BypassUsers map[string]bool `json:"bypass_users"`
+}
+
+// LinkFilterRuntime holds link-filter settings added at runtime via /linkfilter,
+// merged on top of the config-file LinkFilterConfig.
+type LinkFilterRuntime struct {
+	// ExtraAllowedRoles are role IDs allowed to post links, added via command.
+	ExtraAllowedRoles []string `json:"extra_allowed_roles,omitempty"`
+	// ExtraWhitelistDomains are domains whitelisted via command.
+	ExtraWhitelistDomains []string `json:"extra_whitelist_domains,omitempty"`
+	// MessageOverride replaces the config-file warning message when set.
+	MessageOverride string `json:"message_override,omitempty"`
+}
+
+type GuildState struct {
+	mu       sync.RWMutex
+	filePath string
+
+	GuildID string `json:"guild_id"`
+
+	ModLogChannelOverride string `json:"mod_log_channel_override,omitempty"`
+	MuteRoleOverride      string `json:"mute_role_override,omitempty"`
+
+	TicketRuntime      TicketRuntime      `json:"ticket_runtime"`
+	CommissionsRuntime CommissionsRuntime `json:"commissions_runtime"`
+
+	Warnings map[string][]Warning `json:"warnings"`
+
+	AutoRole     AutoRoleState  `json:"autorole"`
+	RoleMenus    []RoleMenu     `json:"role_menus"`
+	Giveaways    []Giveaway     `json:"giveaways"`
+	InviteCounts map[string]int    `json:"invite_counts"`
+	NoPing       NoPingRuntime     `json:"no_ping"`
+	LinkFilter   LinkFilterRuntime `json:"link_filter"`
+
+	GitHubSubscriptions []GitHubSubscription `json:"github_subscriptions,omitempty"`
+}
+
+type TicketRuntime struct {
+	PanelChannelOverride    string            `json:"panel_channel_override,omitempty"`
+	LogChannelOverride      string            `json:"log_channel_override,omitempty"`
+	StaffRolesOverride      string            `json:"staff_roles_override,omitempty"`
+	DiscordCategoryOverride string            `json:"discord_category_override,omitempty"`
+	PanelMessageID          string            `json:"panel_message_id"`
+	TicketCounter           int               `json:"ticket_counter"`
+	OpenTickets             map[string]Ticket `json:"open_tickets"`
+
+	ExtraCategories []TicketCategory `json:"extra_categories,omitempty"`
+}
+
+type Ticket struct {
+	ChannelID   string `json:"channel_id"`
+	UserID      string `json:"user_id"`
+	CategoryID  string `json:"category_id"`
+	SubCategory string `json:"sub_category"`
+	Number      int    `json:"number"`
+	CreatedAt   string `json:"created_at"`
+}
+
+type Warning struct {
+	ID        int    `json:"id"`
+	Reason    string `json:"reason"`
+	ModID     string `json:"mod_id"`
+	Timestamp string `json:"timestamp"`
+}
+
+func LoadConfig(path string) (*Config, error) {
+	data, err := os.ReadFile(path)
+	if err != nil {
+		return nil, err
+	}
