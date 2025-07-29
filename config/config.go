@@ -586,3 +586,101 @@ func LoadConfig(path string) (*Config, error) {
 	if err != nil {
 		return nil, err
 	}
+	var cfg Config
+	if err := json.Unmarshal(data, &cfg); err != nil {
+		return nil, err
+	}
+	if cfg.Tickets.MaxOpenPerUser <= 0 {
+		cfg.Tickets.MaxOpenPerUser = 1
+	}
+	if cfg.Music.MaxQueueSize <= 0 {
+		cfg.Music.MaxQueueSize = 100
+	}
+	if cfg.Music.DefaultVolume <= 0 {
+		cfg.Music.DefaultVolume = 50
+	}
+	if cfg.Music.Backend == "" {
+		cfg.Music.Backend = "direct"
+	}
+	if cfg.Music.Direct.YTDLPPath == "" {
+		cfg.Music.Direct.YTDLPPath = "yt-dlp"
+	}
+	if cfg.Music.Direct.FFmpegPath == "" {
+		cfg.Music.Direct.FFmpegPath = "ffmpeg"
+	}
+	if cfg.Music.Lavalink.Host == "" {
+		cfg.Music.Lavalink.Host = "localhost"
+	}
+	if cfg.Music.Lavalink.Port == 0 {
+		cfg.Music.Lavalink.Port = 2333
+	}
+	if cfg.Music.Lavalink.Password == "" {
+		cfg.Music.Lavalink.Password = "youshallnotpass"
+	}
+	if cfg.Database.Driver == "" {
+		cfg.Database.Driver = "sqlite"
+	}
+	if cfg.Database.SQLite.Path == "" {
+		cfg.Database.SQLite.Path = "data/bot.db"
+	}
+	return &cfg, nil
+}
+
+func SaveConfig(cfg *Config, path string) error {
+	data, err := json.MarshalIndent(cfg, "", "  ")
+	if err != nil {
+		return err
+	}
+	return os.WriteFile(path, data, 0644)
+}
+
+func LoadGuildState(guildID string) *GuildState {
+	dir := "data/guilds"
+	_ = os.MkdirAll(dir, 0755)
+	path := dir + "/" + guildID + ".json"
+
+	gs := &GuildState{
+		GuildID:  guildID,
+		filePath: path,
+		Warnings: make(map[string][]Warning),
+		TicketRuntime: TicketRuntime{
+			OpenTickets: make(map[string]Ticket),
+		},
+		CommissionsRuntime: CommissionsRuntime{
+			OpenCommissions: make(map[string]CommissionTicket),
+			Services:        []CommissionService{},
+			Invoices:        []CommissionInvoice{},
+		},
+		RoleMenus: []RoleMenu{},
+		Giveaways: []Giveaway{},
+		NoPing: NoPingRuntime{
+			BypassUsers: make(map[string]bool),
+		},
+	}
+
+	data, err := os.ReadFile(path)
+	if err == nil {
+		_ = json.Unmarshal(data, gs)
+	}
+	gs.filePath = path
+	if gs.Warnings == nil {
+		gs.Warnings = make(map[string][]Warning)
+	}
+	if gs.TicketRuntime.OpenTickets == nil {
+		gs.TicketRuntime.OpenTickets = make(map[string]Ticket)
+	}
+	if gs.CommissionsRuntime.OpenCommissions == nil {
+		gs.CommissionsRuntime.OpenCommissions = make(map[string]CommissionTicket)
+	}
+	if gs.CommissionsRuntime.Services == nil {
+		gs.CommissionsRuntime.Services = []CommissionService{}
+	}
+	if gs.CommissionsRuntime.Invoices == nil {
+		gs.CommissionsRuntime.Invoices = []CommissionInvoice{}
+	}
+	if gs.RoleMenus == nil {
+		gs.RoleMenus = []RoleMenu{}
+	}
+	if gs.Giveaways == nil {
+		gs.Giveaways = []Giveaway{}
+	}
