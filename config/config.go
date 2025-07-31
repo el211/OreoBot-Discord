@@ -684,3 +684,101 @@ func LoadGuildState(guildID string) *GuildState {
 	if gs.Giveaways == nil {
 		gs.Giveaways = []Giveaway{}
 	}
+	if gs.InviteCounts == nil {
+		gs.InviteCounts = make(map[string]int)
+	}
+	if gs.NoPing.BypassUsers == nil {
+		gs.NoPing.BypassUsers = make(map[string]bool)
+	}
+	if gs.GitHubSubscriptions == nil {
+		gs.GitHubSubscriptions = []GitHubSubscription{}
+	}
+	return gs
+}
+
+func (gs *GuildState) Save() error {
+	gs.mu.RLock()
+	defer gs.mu.RUnlock()
+	data, err := json.MarshalIndent(gs, "", "  ")
+	if err != nil {
+		return err
+	}
+	return os.WriteFile(gs.filePath, data, 0644)
+}
+
+func (gs *GuildState) Lock()   { gs.mu.Lock() }
+func (gs *GuildState) Unlock() { gs.mu.Unlock() }
+
+// MergedLinkFilterAllowedRoles merges config-file allowed roles with runtime ones.
+func MergedLinkFilterAllowedRoles(cfg *Config, gs *GuildState) []string {
+	gs.mu.RLock()
+	defer gs.mu.RUnlock()
+	out := make([]string, 0, len(cfg.LinkFilter.AllowedRoles)+len(gs.LinkFilter.ExtraAllowedRoles))
+	out = append(out, cfg.LinkFilter.AllowedRoles...)
+	out = append(out, gs.LinkFilter.ExtraAllowedRoles...)
+	return out
+}
+
+// MergedLinkFilterWhitelist merges config-file whitelisted domains with runtime ones.
+func MergedLinkFilterWhitelist(cfg *Config, gs *GuildState) []string {
+	gs.mu.RLock()
+	defer gs.mu.RUnlock()
+	out := make([]string, 0, len(cfg.LinkFilter.WhitelistDomains)+len(gs.LinkFilter.ExtraWhitelistDomains))
+	out = append(out, cfg.LinkFilter.WhitelistDomains...)
+	out = append(out, gs.LinkFilter.ExtraWhitelistDomains...)
+	return out
+}
+
+// EffectiveLinkFilterMessage returns the runtime message override if set,
+// otherwise the config-file message, otherwise a built-in default.
+func EffectiveLinkFilterMessage(cfg *Config, gs *GuildState) string {
+	gs.mu.RLock()
+	override := gs.LinkFilter.MessageOverride
+	gs.mu.RUnlock()
+	if override != "" {
+		return override
+	}
+	if cfg.LinkFilter.Message != "" {
+		return cfg.LinkFilter.Message
+	}
+	return "{user} You are not allowed to post links here."
+}
+
+func MergedTicketCategories(cfg *Config, gs *GuildState) []TicketCategory {
+	all := make([]TicketCategory, 0, len(cfg.Tickets.Categories)+len(gs.TicketRuntime.ExtraCategories))
+	all = append(all, cfg.Tickets.Categories...)
+	all = append(all, gs.TicketRuntime.ExtraCategories...)
+	return all
+}
+
+func EffectiveTicketPanelChannel(cfg *Config, gs *GuildState) string {
+	if gs.TicketRuntime.PanelChannelOverride != "" {
+		return gs.TicketRuntime.PanelChannelOverride
+	}
+	return cfg.Tickets.PanelChannel
+}
+
+func EffectiveTicketLogChannel(cfg *Config, gs *GuildState) string {
+	if gs.TicketRuntime.LogChannelOverride != "" {
+		return gs.TicketRuntime.LogChannelOverride
+	}
+	return cfg.Tickets.LogChannel
+}
+
+func EffectiveTicketStaffRoles(cfg *Config, gs *GuildState) []string {
+	raw := cfg.Tickets.StaffRoles
+	if gs.TicketRuntime.StaffRolesOverride != "" {
+		raw = gs.TicketRuntime.StaffRolesOverride
+	}
+	return ParseRoleIDs(raw)
+}
+
+func CategoryStaffRoles(cat *TicketCategory, fallback []string) []string {
+	if cat.StaffRoles != "" {
+		return ParseRoleIDs(cat.StaffRoles)
+	}
+	return fallback
+}
+
+func ParseRoleIDs(raw string) []string {
+	if raw == "" {
