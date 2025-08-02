@@ -782,3 +782,101 @@ func CategoryStaffRoles(cat *TicketCategory, fallback []string) []string {
 
 func ParseRoleIDs(raw string) []string {
 	if raw == "" {
+		return nil
+	}
+	parts := strings.Split(raw, ",")
+	ids := make([]string, 0, len(parts))
+	for _, p := range parts {
+		p = strings.TrimSpace(p)
+		if IsSnowflake(p) {
+			ids = append(ids, p)
+		}
+	}
+	return ids
+}
+
+// IsSnowflake returns true if s looks like a valid Discord snowflake ID
+// (non-empty, all digits, at least 15 characters).
+func IsSnowflake(s string) bool {
+	if len(s) < 15 {
+		return false
+	}
+	for _, c := range s {
+		if c < '0' || c > '9' {
+			return false
+		}
+	}
+	return true
+}
+
+func EffectiveTicketCategory(cfg *Config, gs *GuildState) string {
+	if gs.TicketRuntime.DiscordCategoryOverride != "" {
+		return gs.TicketRuntime.DiscordCategoryOverride
+	}
+	return cfg.Tickets.DiscordCategory
+}
+
+func EffectiveModLogChannel(cfg *Config, gs *GuildState) string {
+	if gs.ModLogChannelOverride != "" {
+		return gs.ModLogChannelOverride
+	}
+	return cfg.Moderation.ModLogChannel
+}
+
+// ──────────────────────────────────────────
+// Commissions helpers
+// ──────────────────────────────────────────
+
+func EffectiveCommissionPanelChannel(cfg *Config, gs *GuildState) string {
+	if IsSnowflake(gs.CommissionsRuntime.PanelChannelOverride) {
+		return gs.CommissionsRuntime.PanelChannelOverride
+	}
+	if IsSnowflake(cfg.Commissions.PanelChannel) {
+		return cfg.Commissions.PanelChannel
+	}
+	return ""
+}
+
+func EffectiveCommissionLogChannel(cfg *Config, gs *GuildState) string {
+	if IsSnowflake(gs.CommissionsRuntime.LogChannelOverride) {
+		return gs.CommissionsRuntime.LogChannelOverride
+	}
+	if IsSnowflake(cfg.Commissions.LogChannel) {
+		return cfg.Commissions.LogChannel
+	}
+	return ""
+}
+
+func EffectiveCommissionStaffRoles(cfg *Config, gs *GuildState) []string {
+	raw := cfg.Commissions.StaffRoles
+	if gs.CommissionsRuntime.StaffRolesOverride != "" {
+		raw = gs.CommissionsRuntime.StaffRolesOverride
+	}
+	return ParseRoleIDs(raw)
+}
+
+func EffectiveCommissionCategory(cfg *Config, gs *GuildState) string {
+	if IsSnowflake(gs.CommissionsRuntime.DiscordCategoryOverride) {
+		return gs.CommissionsRuntime.DiscordCategoryOverride
+	}
+	if IsSnowflake(cfg.Commissions.DiscordCategory) {
+		return cfg.Commissions.DiscordCategory
+	}
+	return "" // no category — channel will be created without a parent
+}
+
+func EffectiveCommissionPayPalEmail(cfg *Config, gs *GuildState) string {
+	if gs.CommissionsRuntime.PayPalEmail != "" {
+		return gs.CommissionsRuntime.PayPalEmail
+	}
+	return cfg.Commissions.PayPalEmail
+}
+
+func EffectiveCommissionPayPalMe(cfg *Config, gs *GuildState) string {
+	if gs.CommissionsRuntime.PayPalMeUser != "" {
+		return gs.CommissionsRuntime.PayPalMeUser
+	}
+	return cfg.Commissions.PayPalMeUser
+}
+
+// MergedCommissionServices merges config-file services with runtime-added ones.
