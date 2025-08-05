@@ -880,3 +880,9 @@ func EffectiveCommissionPayPalMe(cfg *Config, gs *GuildState) string {
 }
 
 // MergedCommissionServices merges config-file services with runtime-added ones.
+func MergedCommissionServices(cfg *Config, gs *GuildState) []CommissionService {
+	all := make([]CommissionService, 0, len(cfg.Commissions.Services)+len(gs.CommissionsRuntime.Services))
+	all = append(all, cfg.Commissions.Services...)
+	all = append(all, gs.CommissionsRuntime.Services...)
+	return all
+}
