@@ -1,0 +1,98 @@
+{
+  "discord": {
+    "token": "PUT_DISCORD_TOKEN_IN_ENV",
+    "guild_id": "PUT_GUILD_ID_HERE",
+    "prefix": "!"
+  },
+
+  "youtube": {
+    "api_key": "PUT_YOUTUBE_API_KEY_HERE"
+  },
+
+  "database": {
+    "driver": "sqlite",
+    "sqlite": {
+      "path": "data/bot.db"
+    },
+    "mongodb": {
+      "uri": "mongodb://localhost:27017",
+      "database": "discord_bot"
+    }
+  },
+
+  "minecraft": {
+    "enabled": false,
+    "rcon_ip": "localhost",
+    "rcon_port": 25575,
+    "rcon_password": "PUT_RCON_PASSWORD_HERE"
+  },
+
+  "permissions": {
+    "admin_roles": [
+      "Admin",
+      "Owner"
+    ],
+    "moderator_roles": [
+      "Moderator",
+      "Mod"
+    ],
+    "dj_roles": [
+      "DJ",
+      "Music"
+    ]
+  },
+
+  "music": {
+    "enabled": false,
+    "backend": "lavalink",
+    "max_queue_size": 100,
+    "max_song_duration": 600,
+    "allow_playlists": true,
+    "default_volume": 50,
+
+    "direct": {
+      "ytdlp_path": "./yt-dlp",
+      "ffmpeg_path": "ffmpeg"
+    },
+
+    "lavalink": {
+      "host": "localhost",
+      "port": 2333,
+      "password": "PUT_LAVALINK_PASSWORD_HERE",
+      "secure": false
+    }
+  },
+
+  "welcome": {
+    "enabled": false,
+    "channel_id": "PUT_WELCOME_CHANNEL_ID_HERE",
+
+    "embed": {
+      "colour": "#f74343",
+      "title": "Welcome!",
+      "message": "👋 Welcome %joined_user%!",
+      "thumbnail": "BOT",
+      "image_enabled": false,
+      "image_url": ""
+    }
+  },
+
+  "leave": {
+    "enabled": false,
+    "channel_id": "PUT_LEAVE_CHANNEL_ID_HERE",
+
+    "embed": {
+      "colour": "#f74343",
+      "title": "Goodbye!",
+      "message": "👋 %joined_user% has left the server.",
+      "thumbnail": "BOT",
+      "image_enabled": false,
+      "image_url": ""
+    }
+  },
+
+  "moderation": {
+    "mod_log_channel": "PUT_MOD_LOG_CHANNEL_ID_HERE",
+    "mute_role": "PUT_MUTE_ROLE_ID_HERE",
+
+    "auto_mod": {
