@@ -96,3 +96,78 @@
     "mute_role": "PUT_MUTE_ROLE_ID_HERE",
 
     "auto_mod": {
+      "enabled": false,
+      "max_mentions": 5,
+      "max_lines": 30,
+      "anti_spam_seconds": 5,
+      "anti_spam_count": 5
+    }
+  },
+
+  "link_filter": {
+    "enabled": false,
+    "allowed_roles": [
+      "PUT_ROLE_ID_ALLOWED_TO_POST_LINKS_HERE"
+    ],
+    "whitelist_domains": [
+      "github.com",
+      "youtube.com"
+    ],
+    "block_invites": true,
+    "delete_message": true,
+    "message": "{user} You are not allowed to post links here."
+  },
+
+  "tickets": {
+    "enabled": false,
+    "panel_channel": "PUT_TICKET_PANEL_CHANNEL_ID_HERE",
+    "log_channel": "PUT_TICKET_LOG_CHANNEL_ID_HERE",
+    "staff_roles": "PUT_STAFF_ROLE_ID_HERE",
+    "discord_category": "PUT_TICKET_CATEGORY_ID_HERE",
+    "max_open_per_user": 3,
+
+    "categories": [
+      {
+        "id": "support",
+        "name": "Support",
+        "staff_role": "PUT_STAFF_ROLE_ID_HERE",
+        "emoji": "🛠️",
+        "description": "General support requests",
+
+        "subcategories": [
+          {
+            "id": "technical",
+            "name": "Technical Support",
+            "emoji": "🔧",
+            "description": "Technical issues and bug reports"
+          },
+
+          {
+            "id": "general",
+            "name": "General",
+            "emoji": "❓",
+            "description": "General questions"
+          }
+        ]
+      },
+
+      {
+        "id": "discord",
+        "name": "Discord",
+        "staff_role": "PUT_STAFF_ROLE_ID_HERE",
+        "emoji": "💬",
+        "description": "Discord-related questions",
+        "subcategories": []
+      },
+
+      {
+        "id": "partnership",
+        "name": "Partnership",
+        "staff_role": "PUT_STAFF_ROLE_ID_HERE",
+        "emoji": "🤝",
+        "description": "Partnership requests",
+        "subcategories": []
+      }
+    ]
+  }
+}
