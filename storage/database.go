@@ -96,3 +96,100 @@ func (s *SQLiteDB) Init() error {
 	);
 	CREATE INDEX IF NOT EXISTS idx_mod_cases_guild_user ON mod_cases(guild_id, user_id);
 	`
+	_, err = db.Exec(schema)
+	if err != nil {
+		return fmt.Errorf("sqlite schema: %w", err)
+	}
+	slog.Info("db sqlite initialised", "path", s.Path)
+	return nil
+}
+
+func (s *SQLiteDB) Close() error {
+	if s.db != nil {
+		return s.db.Close()
+	}
+	return nil
+}
+
+func (s *SQLiteDB) AddWarning(guildID, userID string, w config.Warning) error {
+	_, err := s.db.Exec(
+		"INSERT INTO warnings (guild_id, user_id, mod_id, reason, timestamp) VALUES (?, ?, ?, ?, ?)",
+		guildID, userID, w.ModID, w.Reason, w.Timestamp,
+	)
+	return err
+}
+
+func (s *SQLiteDB) GetWarnings(guildID, userID string) ([]config.Warning, error) {
+	rows, err := s.db.Query(
+		"SELECT id, mod_id, reason, timestamp FROM warnings WHERE guild_id = ? AND user_id = ? ORDER BY id",
+		guildID, userID,
+	)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+
+	var warns []config.Warning
+	for rows.Next() {
+		var w config.Warning
+		if err := rows.Scan(&w.ID, &w.ModID, &w.Reason, &w.Timestamp); err != nil {
+			continue
+		}
+		warns = append(warns, w)
+	}
+	return warns, nil
+}
+
+func (s *SQLiteDB) ClearWarnings(guildID, userID string) error {
+	_, err := s.db.Exec("DELETE FROM warnings WHERE guild_id = ? AND user_id = ?", guildID, userID)
+	return err
+}
+
+func (s *SQLiteDB) AddModCase(guildID string, c ModCase) error {
+	_, err := s.db.Exec(
+		"INSERT INTO mod_cases (guild_id, user_id, mod_id, action, reason, duration, timestamp) VALUES (?, ?, ?, ?, ?, ?, ?)",
+		guildID, c.UserID, c.ModID, c.Action, c.Reason, c.Duration, c.Timestamp,
+	)
+	return err
+}
+
+func (s *SQLiteDB) GetModCases(guildID, userID string, limit int) ([]ModCase, error) {
+	rows, err := s.db.Query(
+		"SELECT id, guild_id, user_id, mod_id, action, reason, duration, timestamp FROM mod_cases WHERE guild_id = ? AND user_id = ? ORDER BY id DESC LIMIT ?",
+		guildID, userID, limit,
+	)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+
+	var cases []ModCase
+	for rows.Next() {
+		var c ModCase
+		if err := rows.Scan(&c.ID, &c.GuildID, &c.UserID, &c.ModID, &c.Action, &c.Reason, &c.Duration, &c.Timestamp); err != nil {
+			continue
+		}
+		cases = append(cases, c)
+	}
+	return cases, nil
+}
+
+type MongoDB struct {
+	URI    string
+	DBName string
+	dir    string
+}
+
+func (m *MongoDB) Init() error {
+
+	m.dir = "data/mongodb_fallback"
+	_ = os.MkdirAll(m.dir, 0755)
+	slog.Info("db mongodb fallback initialised", "path", m.dir)
+	return nil
+}
+
+func (m *MongoDB) Close() error { return nil }
+
+func (m *MongoDB) collectionPath(name string) string {
+	return filepath.Join(m.dir, name+".json")
+}
