@@ -193,3 +193,59 @@ func (m *MongoDB) Close() error { return nil }
 func (m *MongoDB) collectionPath(name string) string {
 	return filepath.Join(m.dir, name+".json")
 }
+
+func (m *MongoDB) loadCollection(name string, v interface{}) error {
+	data, err := os.ReadFile(m.collectionPath(name))
+	if err != nil {
+		return nil
+	}
+	return json.Unmarshal(data, v)
+}
+
+func (m *MongoDB) saveCollection(name string, v interface{}) error {
+	data, err := json.MarshalIndent(v, "", "  ")
+	if err != nil {
+		return err
+	}
+	return os.WriteFile(m.collectionPath(name), data, 0644)
+}
+
+func (m *MongoDB) AddWarning(guildID, userID string, w config.Warning) error {
+	var warns []config.Warning
+	_ = m.loadCollection("warnings_"+guildID+"_"+userID, &warns)
+	w.ID = len(warns) + 1
+	warns = append(warns, w)
+	return m.saveCollection("warnings_"+guildID+"_"+userID, &warns)
+}
+
+func (m *MongoDB) GetWarnings(guildID, userID string) ([]config.Warning, error) {
+	var warns []config.Warning
+	_ = m.loadCollection("warnings_"+guildID+"_"+userID, &warns)
+	return warns, nil
+}
+
+func (m *MongoDB) ClearWarnings(guildID, userID string) error {
+	path := m.collectionPath("warnings_" + guildID + "_" + userID)
+	return os.Remove(path)
+}
+
+func (m *MongoDB) AddModCase(guildID string, c ModCase) error {
+	var cases []ModCase
+	_ = m.loadCollection("modcases_"+guildID, &cases)
+	c.ID = len(cases) + 1
+	cases = append(cases, c)
+	return m.saveCollection("modcases_"+guildID, &cases)
+}
+
+func (m *MongoDB) GetModCases(guildID, userID string, limit int) ([]ModCase, error) {
+	var all []ModCase
+	_ = m.loadCollection("modcases_"+guildID, &all)
+
+	var filtered []ModCase
+	for i := len(all) - 1; i >= 0 && len(filtered) < limit; i-- {
+		if all[i].UserID == userID {
+			filtered = append(filtered, all[i])
+		}
+	}
+	return filtered, nil
+}
