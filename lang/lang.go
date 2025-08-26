@@ -95,3 +95,21 @@ func T(key string, pairs ...string) string {
 		}
 	}
 	mu.RUnlock()
+
+	if !ok {
+		return "{" + key + "}"
+	}
+
+	if len(pairs) == 0 {
+		return s
+	}
+
+	for j := 0; j+1 < len(pairs); j += 2 {
+		s = strings.ReplaceAll(s, "{"+pairs[j]+"}", pairs[j+1])
+	}
+	return s
+}
+
+func Reload(path string) {
+	Load(path)
+}
