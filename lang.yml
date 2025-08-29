@@ -1,0 +1,98 @@
+# ============================================================
+#  lang.yml — Bot message translations
+#  Set active_language below to switch the bot's language.
+#  Add new language blocks following the same key structure.
+# ============================================================
+
+active_language: en
+
+# ────────────────────────────────────────────────────────────
+# ENGLISH  (en)
+# ────────────────────────────────────────────────────────────
+en:
+
+  # ── General / Permissions ────────────────────────────────
+  no_permission:            "❌ You need admin permissions."
+  no_permission_subcommand: "❌ You need admin permissions for this subcommand."
+  admin_only:               "❌ Admin only."
+
+  # ── Moderation ───────────────────────────────────────────
+  mod_ban_success:     "🔨 **{user}** has been banned. Reason: {reason}"
+  mod_ban_failed:      "❌ Failed to ban: {error}"
+  mod_unban_success:   "✅ User `{user_id}` has been unbanned. Reason: {reason}"
+  mod_unban_failed:    "❌ Failed to unban: {error}"
+  mod_kick_success:    "👢 **{user}** has been kicked. Reason: {reason}"
+  mod_kick_failed:     "❌ Failed to kick: {error}"
+  mod_mute_success:    "🔇 **{user}** has been muted for `{duration}`. Reason: {reason}"
+  mod_mute_failed:     "❌ Failed to mute: {error}"
+  mod_mute_invalid_dur:   "❌ Invalid duration. Use formats like `10m`, `2h`, `1d`."
+  mod_mute_max_duration:  "❌ Maximum timeout is 28 days."
+  mod_unmute_success:  "🔊 **{user}** has been unmuted."
+  mod_unmute_failed:   "❌ Failed to unmute: {error}"
+  mod_warn_success:    "⚠️ **{user}** has been warned (Warning #{id}). Reason: {reason}"
+  mod_no_warnings:     "✅ **{user}** has no warnings."
+  mod_warnings_header: "📋 **Warnings for {user}** ({count} total):\n"
+  mod_warnings_entry:  "`#{id}` — {reason} (by <@{mod_id}> on {timestamp})\n"
+  mod_warnings_cleared: "🗑️ All warnings cleared for **{user}**."
+  mod_purge_invalid_count:  "❌ Count must be between 1 and 100."
+  mod_purge_fetch_failed:   "❌ Failed to fetch messages: {error}"
+  mod_purge_no_messages:    "No messages found matching criteria."
+  mod_purge_success:        "🗑️ Deleted **{count}** messages."
+  mod_slowmode_disabled:    "⏱️ Slowmode **disabled**."
+  mod_slowmode_set:         "⏱️ Slowmode set to **{seconds} seconds**."
+  mod_slowmode_failed:      "❌ Failed: {error}"
+  mod_lock_success:         "🔒 Channel **locked**."
+  mod_lock_failed:          "❌ Failed: {error}"
+  mod_unlock_success:       "🔓 Channel **unlocked**."
+  mod_unlock_failed:        "❌ Failed: {error}"
+  mod_log_set:              "📝 Mod-log channel set to <#{channel_id}>."
+  mod_fetch_member_failed:  "❌ Could not fetch member: {error}"
+
+  # ── Userinfo embed ───────────────────────────────────────
+  userinfo_title:       "User Info — {user}"
+  userinfo_roles_field: "Roles ({count})"
+
+  # ── Modlog embed ─────────────────────────────────────────
+  modlog_embed_title:   "Moderation — {action}"
+  modlog_user_field:    "User"
+  modlog_mod_field:     "Moderator"
+  modlog_reason_field:  "Reason"
+  modlog_duration_field: "Duration"
+
+  # ── Tickets ──────────────────────────────────────────────
+  ticket_setup_done: "✅ Ticket system configured! These overrides take priority over config.json.\nUse `/ticket addcategory` to add more categories, then `/ticket panel` to post the panel."
+  ticket_category_added:   "✅ Category **{emoji} {name}** added (runtime). Run `/ticket panel` to refresh."
+  ticket_category_not_found_runtime: "❌ Runtime category `{id}` not found. (Config categories can only be removed from config.json.)"
+  ticket_category_removed: "🗑️ Category `{id}` removed. Run `/ticket panel` to refresh."
+  ticket_category_config_only: "Category `{id}` is defined in config.json. Edit config.json to add subcategories to it, or create a runtime category with `/ticket addcategory`."
+  ticket_category_not_found: "Category `{id}` not found."
+  ticket_subcategory_added:   "✅ Subcategory **{emoji} {name}** added under `{parent}`. Run `/ticket panel` to refresh."
+  ticket_subcategory_not_found: "❌ Subcategory not found in runtime categories."
+  ticket_subcategory_removed:   "🗑️ Subcategory `{id}` removed. Run `/ticket panel` to refresh."
+  ticket_no_panel_channel: "❌ No panel channel set. Either set `tickets.panel_channel` in config.json or run `/ticket setup`."
+  ticket_no_categories:    "❌ No categories configured. Add them in config.json or with `/ticket addcategory`."
+  ticket_panel_send_failed: "Failed to send panel: {error}"
+  ticket_panel_posted:     "Ticket panel posted!"
+  ticket_no_open:          "No open tickets."
+  ticket_category_select_not_found: "Category not found."
+  ticket_max_open:         "You already have {count} open ticket(s) (max {max})."
+  ticket_create_failed:    "Failed to create ticket channel: {error}"
+  ticket_created:          "Ticket created: <#{channel_id}>"
+  ticket_not_ticket_channel: "This is not a ticket channel."
+  ticket_closing:          "Ticket closing..."
+  ticket_not_found:        "Ticket not found."
+  ticket_add_user_failed:  "Failed: {error}"
+  ticket_user_added:       "Added <@{user_id}> to this ticket."
+  ticket_remove_user_failed: "Failed: {error}"
+  ticket_user_removed:     "Removed <@{user_id}> from this ticket."
+  channel_rename_invalid:  "The channel name cannot be empty."
+  channel_rename_failed:   "Failed to rename channel: {error}"
+  channel_renamed:         "Channel renamed to `{name}`."
+
+  # ── Ticket panel embed ───────────────────────────────────
+  ticket_panel_title:       "🎫 Support Tickets"
+  ticket_panel_description: "Select a category below to open a ticket."
+  ticket_close_btn_label:   "🔒 Close Ticket"
+
+  # ── Ticket channel messages ──────────────────────────────
+  ticket_welcome_title:   "Ticket #{number}"
