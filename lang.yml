@@ -194,3 +194,101 @@ en:
   music_skipped:           "⏭️ Skipped."
   music_stopped:           "⏹️ Stopped playback and cleared the queue."
   music_paused:            "⏸️ Paused."
+  music_resumed:           "▶️ Resumed."
+  music_volume_set:        "🔊 Volume set to **{level}%**."
+  music_queue_empty:       "Queue is empty."
+  music_queue_nothing:     "Nothing is playing.\n\n"
+  music_queue_now_playing: "🎵 **Now Playing:** [{title}]({url}) [`{duration}`] (by {added_by})\n\n"
+  music_queue_header:      "**Queue** ({count} songs):\n"
+  music_queue_entry:       "`{pos}.` [{title}]({url}) [`{duration}`] (by {added_by})\n"
+  music_queue_more:        "...and {count} more\n"
+  music_queue_footer:      "\n🔊 Volume: **{volume}%** | Backend: `{backend}`"
+
+  # ── Music embeds ─────────────────────────────────────────
+  music_now_playing_title:    "🎶 Now Playing"
+  music_now_playing_desc:     "**[{title}]({url})**\nDuration: `{duration}` | Requested by: {added_by}\nBackend: `{backend}`"
+  music_added_to_queue_title: "➕ Added to Queue"
+  music_added_to_queue_desc:  "**[{title}]({url})**\nDuration: `{duration}` | Position: #{position} | Requested by: {added_by}"
+  music_queue_embed_title:    "📋 Music Queue"
+  music_nowplaying_embed_title: "🎵 Now Playing"
+  music_nowplaying_embed_desc:  "**[{title}]({url})**\nDuration: `{duration}` | Volume: {volume}%\nRequested by: {added_by} | Backend: `{backend}`"
+
+  # ── Minecraft ────────────────────────────────────────────
+  mc_disabled:              "Minecraft integration is disabled in config.json."
+  mc_rcon_not_init:         "RCON client not initialised."
+  mc_rcon_unreachable:      "Server unreachable: {error}"
+  mc_online:                "⛏️ Minecraft server is **online** and RCON is connected."
+  mc_rcon_error:            "RCON error: {error}"
+  mc_say_sent:              "Sent to server: **{message}**"
+  mc_invalid_player:        "Invalid player name."
+  mc_whitelist_result:      "`whitelist {action} {player}` → {result}"
+  mc_already_linked:        "✅ You are already linked to **{username}**!\nUse `/mc unlink` to remove the link."
+  mc_link_code_failed:      "❌ Failed to generate link code. Please try again."
+  mc_not_linked:            "❌ You don't have a linked Minecraft account."
+  mc_unlink_failed:         "❌ Failed to unlink: {error}"
+  mc_unlinked:              "✅ Unlinked from Minecraft account **{username}**."
+  mc_profile_admin_only:    "❌ Only admins can view other players' profiles."
+  mc_profile_self_not_linked:  "❌ You haven't linked your Minecraft account yet.\nUse `/mc link` to get started!"
+  mc_profile_other_not_linked: "❌ **{user}** hasn't linked their Minecraft account."
+  mc_profile_rcon_unavailable: "⚠️ RCON not available — cannot fetch live data."
+  mc_linked_none:           "No linked accounts found."
+  mc_linked_header:         "🔗 **Linked Accounts** ({count}):\n\n"
+  mc_linked_entry:          "• <@{discord_id}> ↔ **{username}** (linked {linked_at})\n"
+  mc_link_poller_dm:        "✅ Your Discord account is now linked to Minecraft account **{username}**!\nUse `/mc profile` to view your stats."
+
+  # ── MC link embed ────────────────────────────────────────
+  mc_link_embed_title:       "🔗 Link Your Minecraft Account"
+  mc_link_embed_description: "Join the Minecraft server and run this command in chat:\n\n```\n/discord link {code}\n```\n\n⏳ This code expires in **10 minutes**."
+  mc_link_embed_footer:      "Only you can see this message"
+
+  # ── MC profile embed ─────────────────────────────────────
+  mc_profile_embed_title:          "⛏️ {username}'s Minecraft Profile"
+  mc_profile_field_username:       "Minecraft Username"
+  mc_profile_field_status:         "Status"
+  mc_profile_field_linked_since:   "Linked Since"
+  mc_profile_field_balance:        "💰 Balance"
+  mc_profile_field_homes:          "🏠 Homes"
+
+  # ── MC players embed ─────────────────────────────────────
+  mc_players_embed_title: "⛏️ Online Players"
+
+
+# ────────────────────────────────────────────────────────────
+# FRENCH  (fr)
+# ────────────────────────────────────────────────────────────
+fr:
+
+  # ── General / Permissions ────────────────────────────────
+  no_permission:            "❌ Vous n'avez pas les permissions d'administrateur."
+  no_permission_subcommand: "❌ Vous avez besoin des permissions d'administrateur pour cette sous-commande."
+  admin_only:               "❌ Réservé aux administrateurs."
+
+  # ── Moderation ───────────────────────────────────────────
+  mod_ban_success:     "🔨 **{user}** a été banni. Raison : {reason}"
+  mod_ban_failed:      "❌ Échec du bannissement : {error}"
+  mod_unban_success:   "✅ L'utilisateur `{user_id}` a été débanni. Raison : {reason}"
+  mod_unban_failed:    "❌ Échec du débannissement : {error}"
+  mod_kick_success:    "👢 **{user}** a été expulsé. Raison : {reason}"
+  mod_kick_failed:     "❌ Échec de l'expulsion : {error}"
+  mod_mute_success:    "🔇 **{user}** a été mis en sourdine pendant `{duration}`. Raison : {reason}"
+  mod_mute_failed:     "❌ Échec de la mise en sourdine : {error}"
+  mod_mute_invalid_dur:   "❌ Durée invalide. Utilisez des formats comme `10m`, `2h`, `1j`."
+  mod_mute_max_duration:  "❌ La durée maximale est de 28 jours."
+  mod_unmute_success:  "🔊 **{user}** n'est plus en sourdine."
+  mod_unmute_failed:   "❌ Échec de la levée de sourdine : {error}"
+  mod_warn_success:    "⚠️ **{user}** a reçu un avertissement (Avertissement #{id}). Raison : {reason}"
+  mod_no_warnings:     "✅ **{user}** n'a aucun avertissement."
+  mod_warnings_header: "📋 **Avertissements de {user}** ({count} au total) :\n"
+  mod_warnings_entry:  "`#{id}` — {reason} (par <@{mod_id}> le {timestamp})\n"
+  mod_warnings_cleared: "🗑️ Tous les avertissements supprimés pour **{user}**."
+  mod_purge_invalid_count:  "❌ Le nombre doit être compris entre 1 et 100."
+  mod_purge_fetch_failed:   "❌ Échec de la récupération des messages : {error}"
+  mod_purge_no_messages:    "Aucun message correspondant aux critères."
+  mod_purge_success:        "🗑️ **{count}** messages supprimés."
+  mod_slowmode_disabled:    "⏱️ Mode lent **désactivé**."
+  mod_slowmode_set:         "⏱️ Mode lent réglé à **{seconds} secondes**."
+  mod_slowmode_failed:      "❌ Échec : {error}"
+  mod_lock_success:         "🔒 Salon **verrouillé**."
+  mod_lock_failed:          "❌ Échec : {error}"
+  mod_unlock_success:       "🔓 Salon **déverrouillé**."
+  mod_unlock_failed:        "❌ Échec : {error}"
