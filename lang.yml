@@ -487,3 +487,14 @@ fr:
   mc_link_embed_title:       "🔗 Lier votre compte Minecraft"
   mc_link_embed_description: "Rejoignez le serveur Minecraft et tapez cette commande dans le chat :\n\n```\n/discord link {code}\n```\n\n⏳ Ce code expire dans **10 minutes**."
   mc_link_embed_footer:      "Seul vous pouvez voir ce message"
+
+  # ── MC profile embed ─────────────────────────────────────
+  mc_profile_embed_title:        "⛏️ Profil Minecraft de {username}"
+  mc_profile_field_username:     "Pseudo Minecraft"
+  mc_profile_field_status:       "Statut"
+  mc_profile_field_linked_since: "Lié depuis"
+  mc_profile_field_balance:      "💰 Solde"
+  mc_profile_field_homes:        "🏠 Maisons"
+
+  # ── MC players embed ─────────────────────────────────────
+  mc_players_embed_title: "⛏️ Joueurs en ligne"
