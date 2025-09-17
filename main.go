@@ -96,3 +96,95 @@ func run() {
 		if err != nil {
 			slog.Warn("chatbridge init failed", "error", err)
 		} else {
+			bridge.Start()
+			defer bridge.Stop()
+		}
+	}
+
+	b.Session.AddHandler(func(s *discordgo.Session, e *discordgo.VoiceStateUpdate) {
+		if s.State != nil && s.State.User != nil && e.UserID == s.State.User.ID {
+			music.UpdateVoiceState(e.GuildID, e.SessionID)
+		}
+	})
+
+	b.Session.AddHandler(func(s *discordgo.Session, e *discordgo.VoiceServerUpdate) {
+		endpoint := ""
+		if e.Endpoint != nil {
+			endpoint = *e.Endpoint
+		}
+		music.UpdateVoiceServer(e.GuildID, e.Token, endpoint)
+	})
+
+	if err := b.Start(); err != nil {
+		slog.Error("failed to start bot", "error", err)
+		os.Exit(1)
+	}
+	defer b.Stop()
+
+	var guildID string
+	if cfg.Discord.GuildID != "" {
+		guildID = cfg.Discord.GuildID
+	} else if b.Session.State != nil && len(b.Session.State.Guilds) > 0 {
+		guildID = b.Session.State.Guilds[0].ID
+	}
+
+	if guildID != "" {
+		gs := storage.GetGuild(guildID)
+		h.RestoreGiveawayTimers(b.Session, gs)
+		slog.Info("giveaway timers restored")
+	}
+
+	if cfg.Minecraft.Enabled {
+		h.StartLinkPoller(b.Session, guildID)
+	}
+
+	if cfg.Music.Enabled {
+		mgr, err := music.NewManager(b.Session, &cfg.Music)
+		if err != nil {
+			slog.Warn("music system init failed", "error", err)
+		} else {
+			h.SetMusic(mgr)
+			defer mgr.Cleanup()
+		}
+	}
+
+	payments.Start(cfg, b.Session)
+
+	if cfg.GitHub.Enabled {
+		port := cfg.GitHub.WebhookPort
+		if port == 0 {
+			port = 8080
+		}
+		handlers.StartGitHubWebhookServer(b.Session, &cfg.GitHub, port)
+	}
+
+	registered := b.RegisterCommands(h.Commands())
+
+	restartMinutes := cfg.AutoRestartMinutes
+	if *restartFlag >= 0 {
+		restartMinutes = *restartFlag
+	}
+	if restartMinutes > 0 {
+		slog.Info("auto-restart enabled", "interval_minutes", restartMinutes)
+		go func() {
+			time.Sleep(time.Duration(restartMinutes) * time.Minute)
+			slog.Info("scheduled restart", "interval_minutes", restartMinutes)
+			if *cleanup {
+				b.CleanupCommands(registered)
+			}
+			b.Stop()
+			os.Exit(exitCodeScheduledRestart)
+		}()
+	}
+
+	slog.Info("bot is running, press ctrl+c to exit")
+
+	stop := make(chan os.Signal, 1)
+	signal.Notify(stop, os.Interrupt, syscall.SIGTERM)
+	<-stop
+
+	slog.Info("shutting down")
+	if *cleanup {
+		b.CleanupCommands(registered)
+	}
+}
