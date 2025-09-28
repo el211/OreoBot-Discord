@@ -96,3 +96,101 @@ func (h *Handler) handleSlashCommand(s *discordgo.Session, i *discordgo.Interact
 		handleUnban(s, i)
 	case "kick":
 		handleKick(s, i)
+	case "mute":
+		handleMute(s, i)
+	case "unmute":
+		handleUnmute(s, i)
+	case "warn":
+		handleWarn(s, i)
+	case "warnings":
+		handleWarnings(s, i)
+	case "clearwarnings":
+		handleClearWarnings(s, i)
+	case "purge", "clear":
+		handlePurge(s, i)
+	case "slowmode":
+		handleSlowmode(s, i)
+	case "lock":
+		handleLock(s, i)
+	case "unlock":
+		handleUnlock(s, i)
+	case "modlog":
+		handleModlog(s, i)
+	case "userinfo":
+		handleUserinfo(s, i)
+
+	case "ticket":
+		handleTicketCommand(s, i)
+	case "close":
+		handleCloseCommand(s, i)
+	case "add":
+		handleAddUser(s, i)
+	case "remove":
+		handleRemoveUser(s, i)
+
+	case "commission":
+		handleCommissionCommand(s, i)
+	case "invoice":
+		handleInvoiceCommand(s, i)
+
+	case "mc":
+		h.handleMinecraftCommand(s, i)
+
+	case "say":
+		handleSay(s, i)
+	case "embed":
+		handleEmbed(s, i)
+	case "renamechannel":
+		handleRenameChannel(s, i)
+
+	case "play", "skip", "stop", "queue", "volume", "nowplaying", "pause", "resume":
+		h.handleMusicCommand(s, i, name)
+
+	case "joinrole":
+		h.handleJoinRoleCommand(s, i)
+	case "rolemenu":
+		h.handleRoleMenuCommand(s, i)
+	case "giveaway":
+		h.handleGiveawayCommand(s, i)
+
+	case "invites":
+		h.handleInvitesCommand(s, i)
+	case "resetinvites":
+		h.handleResetInvitesCommand(s, i)
+
+	case "verify":
+		h.handleVerify(s, i)
+
+	case "noping":
+		h.handleNoPingCommand(s, i)
+
+	case "linkfilter":
+		h.handleLinkFilterCommand(s, i)
+
+	case "github":
+		handleGithubCommand(s, i)
+
+	default:
+		if cc, ok := h.lookupCustomCommand(name); ok {
+			respond(s, i, resolveCustomPlaceholders(s, i, cc.Message), cc.Ephemeral)
+			return
+		}
+		slog.Warn("unknown command", "name", name)
+	}
+}
+
+func (h *Handler) handleAutocomplete(s *discordgo.Session, i *discordgo.InteractionCreate) {
+	switch i.ApplicationCommandData().Name {
+	case "verify":
+		h.handleVerifyAutocomplete(s, i)
+	case "invoice":
+		handleInvoiceCurrencyAutocomplete(s, i)
+	}
+}
+
+func handleComponent(s *discordgo.Session, i *discordgo.InteractionCreate) {
+	customID := i.MessageComponentData().CustomID
+
+	if strings.HasPrefix(customID, "rolemenu:") {
+		HandleRoleMenuButton(s, i)
+		return
