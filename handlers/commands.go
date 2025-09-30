@@ -194,3 +194,100 @@ func handleComponent(s *discordgo.Session, i *discordgo.InteractionCreate) {
 	if strings.HasPrefix(customID, "rolemenu:") {
 		HandleRoleMenuButton(s, i)
 		return
+	}
+	if strings.HasPrefix(customID, "giveaway_enter:") {
+		HandleGiveawayEnter(s, i)
+		return
+	}
+	if strings.HasPrefix(customID, "giveaway_ended_") {
+		return
+	}
+	if strings.HasPrefix(customID, "commission_invoice_btn:") {
+		handleCommissionInvoiceButton(s, i)
+		return
+	}
+	if strings.HasPrefix(customID, "commission_quote_btn:") {
+		handleCommissionQuoteButton(s, i)
+		return
+	}
+	if strings.HasPrefix(customID, "commission_quote_accept:") {
+		handleCommissionQuoteAccept(s, i)
+		return
+	}
+	if strings.HasPrefix(customID, "commission_quote_decline:") {
+		handleCommissionQuoteDecline(s, i)
+		return
+	}
+
+	switch customID {
+	case "ticket_category_select":
+		handleTicketCategorySelect(s, i)
+	case "ticket_subcategory_select":
+		handleTicketSubcategorySelect(s, i)
+	case "ticket_close_btn":
+		handleCloseButton(s, i)
+	case "ticket_close_confirm":
+		handleCloseConfirm(s, i)
+	case "ticket_close_cancel":
+		handleCloseCancel(s, i)
+
+	case "commission_order":
+		handleCommissionOrder(s, i)
+	case "commission_service_select":
+		handleCommissionServiceSelect(s, i)
+	case "commission_close_btn":
+		handleCommissionCloseButton(s, i)
+	case "commission_close_confirm":
+		handleCommissionCloseConfirm(s, i)
+	case "commission_close_cancel":
+		handleCommissionCloseCancel(s, i)
+
+	default:
+		slog.Warn("unknown component", "custom_id", customID)
+		_ = s.InteractionRespond(i.Interaction, &discordgo.InteractionResponse{
+			Type: discordgo.InteractionResponseChannelMessageWithSource,
+			Data: &discordgo.InteractionResponseData{
+				Content: "⚠️ This button is no longer valid. Please use the latest panel.",
+				Flags:   discordgo.MessageFlagsEphemeral,
+			},
+		})
+	}
+}
+
+func handleModal(s *discordgo.Session, i *discordgo.InteractionCreate) {
+	customID := i.ModalSubmitData().CustomID
+	if strings.HasPrefix(customID, "commission_form:") {
+		handleCommissionFormSubmit(s, i)
+		return
+	}
+	if strings.HasPrefix(customID, "commission_invoice_modal:") {
+		handleCommissionInvoiceModalSubmit(s, i)
+		return
+	}
+	if strings.HasPrefix(customID, "commission_quote_modal:") {
+		handleCommissionQuoteModalSubmit(s, i)
+		return
+	}
+	if strings.HasPrefix(customID, "commission_quote_decline_modal:") {
+		handleCommissionQuoteDeclineModalSubmit(s, i)
+		return
+	}
+	slog.Warn("unknown modal", "custom_id", customID)
+}
+
+func respond(s *discordgo.Session, i *discordgo.InteractionCreate, content string, ephemeral bool) {
+	flags := discordgo.MessageFlags(0)
+	if ephemeral {
+		flags = discordgo.MessageFlagsEphemeral
+	}
+	err := s.InteractionRespond(i.Interaction, &discordgo.InteractionResponse{
+		Type: discordgo.InteractionResponseChannelMessageWithSource,
+		Data: &discordgo.InteractionResponseData{
+			Content: content,
+			Flags:   flags,
+		},
+	})
+	if err != nil {
+		slog.Error("failed to respond", "error", err)
+	}
+}
