@@ -291,3 +291,102 @@ func respond(s *discordgo.Session, i *discordgo.InteractionCreate, content strin
 		slog.Error("failed to respond", "error", err)
 	}
 }
+
+func respondEmbed(s *discordgo.Session, i *discordgo.InteractionCreate, embed *discordgo.MessageEmbed, ephemeral bool) {
+	flags := discordgo.MessageFlags(0)
+	if ephemeral {
+		flags = discordgo.MessageFlagsEphemeral
+	}
+	_ = s.InteractionRespond(i.Interaction, &discordgo.InteractionResponse{
+		Type: discordgo.InteractionResponseChannelMessageWithSource,
+		Data: &discordgo.InteractionResponseData{
+			Embeds: []*discordgo.MessageEmbed{embed},
+			Flags:  flags,
+		},
+	})
+}
+
+func followup(s *discordgo.Session, i *discordgo.InteractionCreate, content string) {
+	_, _ = s.FollowupMessageCreate(i.Interaction, true, &discordgo.WebhookParams{
+		Content: content,
+		Flags:   discordgo.MessageFlagsEphemeral,
+	})
+}
+
+func optionMap(i *discordgo.InteractionCreate) map[string]*discordgo.ApplicationCommandInteractionDataOption {
+	m := make(map[string]*discordgo.ApplicationCommandInteractionDataOption)
+	for _, opt := range i.ApplicationCommandData().Options {
+		m[opt.Name] = opt
+	}
+	return m
+}
+
+func subOptMap(opts []*discordgo.ApplicationCommandInteractionDataOption) map[string]*discordgo.ApplicationCommandInteractionDataOption {
+	m := make(map[string]*discordgo.ApplicationCommandInteractionDataOption)
+	for _, opt := range opts {
+		m[opt.Name] = opt
+	}
+	return m
+}
+
+func optStr(m map[string]*discordgo.ApplicationCommandInteractionDataOption, key, def string) string {
+	if o, ok := m[key]; ok {
+		return o.StringValue()
+	}
+	return def
+}
+
+func optInt(m map[string]*discordgo.ApplicationCommandInteractionDataOption, key string, def int64) int64 {
+	if o, ok := m[key]; ok {
+		return o.IntValue()
+	}
+	return def
+}
+
+func applyPlaceholders(msg, userMention, username, guildName string, memberCount int) string {
+	msg = strings.ReplaceAll(msg, "{user}", userMention)
+	msg = strings.ReplaceAll(msg, "{username}", username)
+	msg = strings.ReplaceAll(msg, "{server}", guildName)
+	msg = strings.ReplaceAll(msg, "{member_count}", strconv.Itoa(memberCount))
+	return msg
+}
+
+func resolveCustomPlaceholders(s *discordgo.Session, i *discordgo.InteractionCreate, msg string) string {
+	if i.Member == nil || i.Member.User == nil {
+		return msg
+	}
+
+	userMention := "<@" + i.Member.User.ID + ">"
+	username := i.Member.User.Username
+	guildName := ""
+	memberCount := 0
+
+	if guild, err := s.Guild(i.GuildID); err == nil {
+		guildName = guild.Name
+		memberCount = guild.MemberCount
+	}
+
+	return applyPlaceholders(msg, userMention, username, guildName, memberCount)
+}
+
+func hasConfigRole(s *discordgo.Session, guildID string, member *discordgo.Member, allowedNames []string) bool {
+	if member == nil || len(allowedNames) == 0 {
+		return false
+	}
+
+	roles, err := s.GuildRoles(guildID)
+	if err != nil {
+		return false
+	}
+
+	nameSet := make(map[string]bool, len(allowedNames))
+	for _, n := range allowedNames {
+		nameSet[strings.ToLower(n)] = true
+	}
+
+	for _, role := range roles {
+		if nameSet[strings.ToLower(role.Name)] {
+			for _, memberRoleID := range member.Roles {
+				if memberRoleID == role.ID {
+					return true
+				}
