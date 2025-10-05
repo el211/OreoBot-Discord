@@ -390,3 +390,32 @@ func hasConfigRole(s *discordgo.Session, guildID string, member *discordgo.Membe
 				if memberRoleID == role.ID {
 					return true
 				}
+			}
+		}
+	}
+	return false
+}
+
+func (h *Handler) isAdmin(s *discordgo.Session, i *discordgo.InteractionCreate) bool {
+	if i.Member.Permissions&discordgo.PermissionAdministrator != 0 {
+		return true
+	}
+	return hasConfigRole(s, i.GuildID, i.Member, h.cfg.Permissions.AdminRoles)
+}
+
+func (h *Handler) isModerator(s *discordgo.Session, i *discordgo.InteractionCreate) bool {
+	if h.isAdmin(s, i) {
+		return true
+	}
+	if i.Member.Permissions&discordgo.PermissionBanMembers != 0 {
+		return true
+	}
+	return hasConfigRole(s, i.GuildID, i.Member, h.cfg.Permissions.ModeratorRoles)
+}
+
+func (h *Handler) isDJ(s *discordgo.Session, i *discordgo.InteractionCreate) bool {
+	if h.isModerator(s, i) {
+		return true
+	}
+	return hasConfigRole(s, i.GuildID, i.Member, h.cfg.Permissions.DJRoles)
+}
