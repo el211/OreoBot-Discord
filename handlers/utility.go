@@ -95,3 +95,43 @@ func handleEmbed(s *discordgo.Session, i *discordgo.InteractionCreate) {
 			colour = int(v)
 		}
 	}
+
+	embed := &discordgo.MessageEmbed{
+		Title:       title,
+		Description: desc,
+		Color:       colour,
+	}
+
+	if img, ok := opts["image"]; ok {
+		embed.Image = &discordgo.MessageEmbedImage{URL: img.StringValue()}
+	}
+	if thumb, ok := opts["thumbnail"]; ok {
+		embed.Thumbnail = &discordgo.MessageEmbedThumbnail{URL: thumb.StringValue()}
+	}
+	if footer, ok := opts["footer"]; ok {
+		embed.Footer = &discordgo.MessageEmbedFooter{Text: footer.StringValue()}
+	}
+	if u, ok := opts["url"]; ok {
+		embed.URL = u.StringValue()
+	}
+
+	authorName := ""
+	authorIcon := ""
+	if a, ok := opts["author"]; ok {
+		authorName = a.StringValue()
+	}
+	if ai, ok := opts["author-icon"]; ok {
+		authorIcon = ai.StringValue()
+	}
+	if authorName != "" {
+		embed.Author = &discordgo.MessageEmbedAuthor{Name: authorName, IconURL: authorIcon}
+	}
+
+	_, err := s.ChannelMessageSendEmbed(ch.ID, embed)
+	if err != nil {
+		respond(s, i, lang.T("embed_failed", "error", err.Error()), true)
+		return
+	}
+
+	respond(s, i, lang.T("embed_success", "channel_id", ch.ID), true)
+}
