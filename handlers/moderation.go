@@ -194,3 +194,101 @@ func handleKick(s *discordgo.Session, i *discordgo.InteractionCreate) {
 func handleMute(s *discordgo.Session, i *discordgo.InteractionCreate) {
 	opts := optionMap(i)
 	target := opts["user"].UserValue(s)
+	durStr := opts["duration"].StringValue()
+	reason := optStr(opts, "reason", "No reason provided")
+
+	dur, err := parseDuration(durStr)
+	if err != nil || dur <= 0 {
+		respond(s, i, lang.T("mod_mute_invalid_dur"), true)
+		return
+	}
+	if dur > 28*24*time.Hour {
+		respond(s, i, lang.T("mod_mute_max_duration"), true)
+		return
+	}
+
+	until := time.Now().Add(dur)
+	err = s.GuildMemberTimeout(i.GuildID, target.ID, &until)
+	if err != nil {
+		respond(s, i, lang.T("mod_mute_failed", "error", err.Error()), true)
+		return
+	}
+
+	respond(s, i, lang.T("mod_mute_success", "user", target.Username, "duration", durStr, "reason", reason), false)
+	logModAction(s, i.GuildID, "Mute", target, i.Member.User, reason, durStr)
+
+	if ActiveBridge != nil {
+		ActiveBridge.SyncMuteToMC(target.ID, until, reason, i.Member.User.Username)
+	}
+}
+
+func handleUnmute(s *discordgo.Session, i *discordgo.InteractionCreate) {
+	opts := optionMap(i)
+	target := opts["user"].UserValue(s)
+
+	err := s.GuildMemberTimeout(i.GuildID, target.ID, nil)
+	if err != nil {
+		respond(s, i, lang.T("mod_unmute_failed", "error", err.Error()), true)
+		return
+	}
+
+	respond(s, i, lang.T("mod_unmute_success", "user", target.Username), false)
+	logModAction(s, i.GuildID, "Unmute", target, i.Member.User, "", "")
+
+	if ActiveBridge != nil {
+		ActiveBridge.SyncUnmuteToMC(target.ID)
+	}
+}
+
+func handleWarn(s *discordgo.Session, i *discordgo.InteractionCreate) {
+	opts := optionMap(i)
+	target := opts["user"].UserValue(s)
+	reason := opts["reason"].StringValue()
+
+	w := config.Warning{
+		Reason:    reason,
+		ModID:     i.Member.User.ID,
+		Timestamp: time.Now().Format(time.RFC3339),
+	}
+
+	if storage.DB != nil {
+		_ = storage.DB.AddWarning(i.GuildID, target.ID, w)
+	}
+
+	gs := storage.GetGuild(i.GuildID)
+	gs.Lock()
+	warns := gs.Warnings[target.ID]
+	w.ID = len(warns) + 1
+	gs.Warnings[target.ID] = append(warns, w)
+	gs.Unlock()
+	_ = gs.Save()
+
+	respond(s, i, lang.T("mod_warn_success", "user", target.Username, "id", strconv.Itoa(w.ID), "reason", reason), false)
+	logModAction(s, i.GuildID, fmt.Sprintf("Warn (#%d)", w.ID), target, i.Member.User, reason, "")
+}
+
+func handleWarnings(s *discordgo.Session, i *discordgo.InteractionCreate) {
+	opts := optionMap(i)
+	target := opts["user"].UserValue(s)
+
+	var warns []config.Warning
+	if storage.DB != nil {
+		warns, _ = storage.DB.GetWarnings(i.GuildID, target.ID)
+	}
+	if len(warns) == 0 {
+		gs := storage.GetGuild(i.GuildID)
+		gs.Lock()
+		warns = append([]config.Warning(nil), gs.Warnings[target.ID]...)
+		gs.Unlock()
+	}
+
+	if len(warns) == 0 {
+		respond(s, i, lang.T("mod_no_warnings", "user", target.Username), true)
+		return
+	}
+
+	var sb strings.Builder
+	sb.WriteString(lang.T("mod_warnings_header", "user", target.Username, "count", strconv.Itoa(len(warns))))
+	for _, w := range warns {
+		ts := w.Timestamp
+		if len(ts) >= 10 {
