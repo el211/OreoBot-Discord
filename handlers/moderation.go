@@ -292,3 +292,101 @@ func handleWarnings(s *discordgo.Session, i *discordgo.InteractionCreate) {
 	for _, w := range warns {
 		ts := w.Timestamp
 		if len(ts) >= 10 {
+			ts = ts[:10]
+		}
+		sb.WriteString(lang.T("mod_warnings_entry",
+			"id", strconv.Itoa(w.ID),
+			"reason", w.Reason,
+			"mod_id", w.ModID,
+			"timestamp", ts,
+		))
+	}
+	respond(s, i, sb.String(), true)
+}
+
+func handleClearWarnings(s *discordgo.Session, i *discordgo.InteractionCreate) {
+	opts := optionMap(i)
+	target := opts["user"].UserValue(s)
+
+	if storage.DB != nil {
+		_ = storage.DB.ClearWarnings(i.GuildID, target.ID)
+	}
+
+	gs := storage.GetGuild(i.GuildID)
+	gs.Lock()
+	delete(gs.Warnings, target.ID)
+	gs.Unlock()
+	_ = gs.Save()
+
+	respond(s, i, lang.T("mod_warnings_cleared", "user", target.Username), false)
+}
+
+func handlePurge(s *discordgo.Session, i *discordgo.InteractionCreate) {
+	opts := optionMap(i)
+	count := int(opts["count"].IntValue())
+	if count < 1 || count > 100 {
+		respond(s, i, lang.T("mod_purge_invalid_count"), true)
+		return
+	}
+
+	_ = s.InteractionRespond(i.Interaction, &discordgo.InteractionResponse{
+		Type: discordgo.InteractionResponseDeferredChannelMessageWithSource,
+		Data: &discordgo.InteractionResponseData{Flags: discordgo.MessageFlagsEphemeral},
+	})
+
+	msgs, err := s.ChannelMessages(i.ChannelID, count, "", "", "")
+	if err != nil {
+		followup(s, i, lang.T("mod_purge_fetch_failed", "error", err.Error()))
+		return
+	}
+
+	var filterUser *discordgo.User
+	if u, ok := opts["user"]; ok {
+		filterUser = u.UserValue(s)
+	}
+
+	twoWeeksAgo := time.Now().Add(-14 * 24 * time.Hour)
+	ids := make([]string, 0, len(msgs))
+	for _, m := range msgs {
+		if filterUser != nil && m.Author.ID != filterUser.ID {
+			continue
+		}
+		if m.Timestamp.Before(twoWeeksAgo) {
+			continue
+		}
+		ids = append(ids, m.ID)
+	}
+
+	if len(ids) == 0 {
+		followup(s, i, lang.T("mod_purge_no_messages"))
+		return
+	}
+
+	if len(ids) == 1 {
+		_ = s.ChannelMessageDelete(i.ChannelID, ids[0])
+	} else {
+		_ = s.ChannelMessagesBulkDelete(i.ChannelID, ids)
+	}
+
+	followup(s, i, lang.T("mod_purge_success", "count", strconv.Itoa(len(ids))))
+}
+
+func handleSlowmode(s *discordgo.Session, i *discordgo.InteractionCreate) {
+	opts := optionMap(i)
+	secs := int(opts["seconds"].IntValue())
+	if secs < 0 {
+		secs = 0
+	}
+	if secs > 21600 {
+		secs = 21600
+	}
+
+	_, err := s.ChannelEdit(i.ChannelID, &discordgo.ChannelEdit{RateLimitPerUser: &secs})
+	if err != nil {
+		respond(s, i, lang.T("mod_slowmode_failed", "error", err.Error()), true)
+		return
+	}
+
+	if secs == 0 {
+		respond(s, i, lang.T("mod_slowmode_disabled"), false)
+	} else {
