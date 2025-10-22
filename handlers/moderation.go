@@ -390,3 +390,101 @@ func handleSlowmode(s *discordgo.Session, i *discordgo.InteractionCreate) {
 	if secs == 0 {
 		respond(s, i, lang.T("mod_slowmode_disabled"), false)
 	} else {
+		respond(s, i, lang.T("mod_slowmode_set", "seconds", strconv.Itoa(secs)), false)
+	}
+}
+
+func handleLock(s *discordgo.Session, i *discordgo.InteractionCreate) {
+	err := s.ChannelPermissionSet(
+		i.ChannelID, i.GuildID,
+		discordgo.PermissionOverwriteTypeRole,
+		0, discordgo.PermissionSendMessages,
+	)
+	if err != nil {
+		respond(s, i, lang.T("mod_lock_failed", "error", err.Error()), true)
+		return
+	}
+	respond(s, i, lang.T("mod_lock_success"), false)
+}
+
+func handleUnlock(s *discordgo.Session, i *discordgo.InteractionCreate) {
+	err := s.ChannelPermissionSet(
+		i.ChannelID, i.GuildID,
+		discordgo.PermissionOverwriteTypeRole,
+		discordgo.PermissionSendMessages, 0,
+	)
+	if err != nil {
+		respond(s, i, lang.T("mod_unlock_failed", "error", err.Error()), true)
+		return
+	}
+	respond(s, i, lang.T("mod_unlock_success"), false)
+}
+
+func handleModlog(s *discordgo.Session, i *discordgo.InteractionCreate) {
+	opts := optionMap(i)
+	ch := opts["channel"].ChannelValue(s)
+
+	gs := storage.GetGuild(i.GuildID)
+	gs.Lock()
+	gs.ModLogChannelOverride = ch.ID
+	gs.Unlock()
+	_ = gs.Save()
+
+	respond(s, i, lang.T("mod_log_set", "channel_id", ch.ID), false)
+}
+
+func handleUserinfo(s *discordgo.Session, i *discordgo.InteractionCreate) {
+	opts := optionMap(i)
+	var target *discordgo.User
+	if u, ok := opts["user"]; ok {
+		target = u.UserValue(s)
+	} else {
+		target = i.Member.User
+	}
+
+	member, err := s.GuildMember(i.GuildID, target.ID)
+	if err != nil {
+		respond(s, i, lang.T("mod_fetch_member_failed", "error", err.Error()), true)
+		return
+	}
+
+	joinedAt := "unknown"
+	if member.JoinedAt != (time.Time{}) {
+		joinedAt = fmt.Sprintf("<t:%d:F>", member.JoinedAt.Unix())
+	}
+	createdAt := fmt.Sprintf("<t:%d:F>", snowflakeTime(target.ID).Unix())
+
+	roles := "None"
+	if len(member.Roles) > 0 {
+		r := make([]string, len(member.Roles))
+		for idx, rid := range member.Roles {
+			r[idx] = fmt.Sprintf("<@&%s>", rid)
+		}
+		roles = strings.Join(r, ", ")
+	}
+
+	warnCount := 0
+	if storage.DB != nil {
+		if w, err := storage.DB.GetWarnings(i.GuildID, target.ID); err == nil {
+			warnCount = len(w)
+		}
+	}
+	if warnCount == 0 {
+		gs := storage.GetGuild(i.GuildID)
+		gs.Lock()
+		warnCount = len(gs.Warnings[target.ID])
+		gs.Unlock()
+	}
+
+	embed := &discordgo.MessageEmbed{
+		Title: lang.T("userinfo_title", "user", target.Username),
+		Color: 0x5865F2,
+		Thumbnail: &discordgo.MessageEmbedThumbnail{
+			URL: target.AvatarURL("256"),
+		},
+		Fields: []*discordgo.MessageEmbedField{
+			{Name: "ID", Value: target.ID, Inline: true},
+			{Name: "Account Created", Value: createdAt, Inline: true},
+			{Name: "Joined Server", Value: joinedAt, Inline: true},
+			{Name: lang.T("userinfo_roles_field", "count", strconv.Itoa(len(member.Roles))), Value: roles},
+			{Name: "Warnings", Value: strconv.Itoa(warnCount), Inline: true},
