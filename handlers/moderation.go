@@ -488,3 +488,80 @@ func handleUserinfo(s *discordgo.Session, i *discordgo.InteractionCreate) {
 			{Name: "Joined Server", Value: joinedAt, Inline: true},
 			{Name: lang.T("userinfo_roles_field", "count", strconv.Itoa(len(member.Roles))), Value: roles},
 			{Name: "Warnings", Value: strconv.Itoa(warnCount), Inline: true},
+		},
+	}
+
+	respondEmbed(s, i, embed, true)
+}
+
+func logModAction(s *discordgo.Session, guildID, action string, target, moderator *discordgo.User, reason, duration string) {
+	if storage.DB != nil {
+		_ = storage.DB.AddModCase(guildID, storage.ModCase{
+			GuildID:   guildID,
+			UserID:    target.ID,
+			ModID:     moderator.ID,
+			Action:    action,
+			Reason:    reason,
+			Duration:  duration,
+			Timestamp: time.Now().Format(time.RFC3339),
+		})
+	}
+
+	gs := storage.GetGuild(guildID)
+	logCh := config.EffectiveModLogChannel(storage.Cfg, gs)
+	if logCh == "" {
+		return
+	}
+
+	embed := &discordgo.MessageEmbed{
+		Title: lang.T("modlog_embed_title", "action", action),
+		Color: 0xED4245,
+		Fields: []*discordgo.MessageEmbedField{
+			{
+				Name:   lang.T("modlog_user_field"),
+				Value:  fmt.Sprintf("%s (`%s`)", target.Username, target.ID),
+				Inline: true,
+			},
+			{
+				Name:   lang.T("modlog_mod_field"),
+				Value:  fmt.Sprintf("%s (`%s`)", moderator.Username, moderator.ID),
+				Inline: true,
+			},
+		},
+		Timestamp: time.Now().Format(time.RFC3339),
+	}
+	if reason != "" {
+		embed.Fields = append(embed.Fields, &discordgo.MessageEmbedField{
+			Name:  lang.T("modlog_reason_field"),
+			Value: reason,
+		})
+	}
+	if duration != "" {
+		embed.Fields = append(embed.Fields, &discordgo.MessageEmbedField{
+			Name:   lang.T("modlog_duration_field"),
+			Value:  duration,
+			Inline: true,
+		})
+	}
+
+	_, _ = s.ChannelMessageSendEmbed(logCh, embed)
+}
+
+func parseDuration(s string) (time.Duration, error) {
+	s = strings.TrimSpace(strings.ToLower(s))
+	if strings.HasSuffix(s, "d") {
+		n, err := strconv.Atoi(strings.TrimSuffix(s, "d"))
+		if err != nil {
+			return 0, err
+		}
+		return time.Duration(n) * 24 * time.Hour, nil
+	}
+	return time.ParseDuration(s)
+}
+
+func snowflakeTime(id string) time.Time {
+	n, _ := strconv.ParseInt(id, 10, 64)
+	ms := (n >> 22) + 1420070400000
+	return time.Unix(ms/1000, (ms%1000)*1e6)
+}
+
