@@ -95,3 +95,102 @@ func autoroleCommands() []*discordgo.ApplicationCommand {
 		},
 	}
 }
+
+func (h *Handler) handleJoinRoleCommand(s *discordgo.Session, i *discordgo.InteractionCreate) {
+	if !h.isAdmin(s, i) {
+		respond(s, i, lang.T("no_permission"), true)
+		return
+	}
+	sub := i.ApplicationCommandData().Options[0]
+	gs := storage.GetGuild(i.GuildID)
+
+	switch sub.Name {
+	case "set":
+		om := subOptMap(sub.Options)
+		role := om["role"].RoleValue(s, i.GuildID)
+
+		if warning := checkBotRoleHierarchy(s, i.GuildID, role); warning != "" {
+			respond(s, i, lang.T("autorole_set_warning", "warning", warning), true)
+		} else {
+			respond(s, i, lang.T("autorole_set_success", "role_id", role.ID), true)
+		}
+
+		gs.Lock()
+		gs.AutoRole = config.AutoRoleState{Enabled: true, RoleID: role.ID}
+		gs.Unlock()
+		_ = gs.Save()
+
+	case "disable":
+		gs.Lock()
+		gs.AutoRole = config.AutoRoleState{Enabled: false}
+		gs.Unlock()
+		_ = gs.Save()
+		respond(s, i, lang.T("autorole_disabled"), true)
+
+	case "status":
+		gs.Lock()
+		ar := gs.AutoRole
+		gs.Unlock()
+		if ar.Enabled && ar.RoleID != "" {
+			respond(s, i, lang.T("autorole_status_enabled", "role_id", ar.RoleID), true)
+		} else {
+			respond(s, i, lang.T("autorole_status_disabled"), true)
+		}
+
+	case "check":
+		gs.Lock()
+		ar := gs.AutoRole
+		gs.Unlock()
+		if !ar.Enabled || ar.RoleID == "" {
+			respond(s, i, lang.T("autorole_hint_set"), true)
+			return
+		}
+		role, err := s.State.Role(i.GuildID, ar.RoleID)
+		if err != nil {
+			respond(s, i, lang.T("autorole_role_deleted", "role_id", ar.RoleID), true)
+			return
+		}
+		if w := checkBotRoleHierarchy(s, i.GuildID, role); w != "" {
+			respond(s, i, lang.T("autorole_problem", "warning", w), true)
+		} else {
+			respond(s, i, lang.T("autorole_ok", "role_id", ar.RoleID), true)
+		}
+	}
+}
+
+func checkBotRoleHierarchy(s *discordgo.Session, guildID string, targetRole *discordgo.Role) string {
+	if s.State == nil || s.State.User == nil {
+		return lang.T("autorole_fetch_bot_failed", "error", "session not ready")
+	}
+	botID := s.State.User.ID
+
+	botMember, err := s.GuildMember(guildID, botID)
+	if err != nil {
+		return lang.T("autorole_fetch_bot_failed", "error", err.Error())
+	}
+
+	allRoles, err := s.GuildRoles(guildID)
+	if err != nil {
+		return lang.T("autorole_fetch_roles_failed", "error", err.Error())
+	}
+
+	roleMap := make(map[string]*discordgo.Role, len(allRoles))
+	for _, r := range allRoles {
+		roleMap[r.ID] = r
+	}
+
+	botHighestPos := 0
+	for _, rid := range botMember.Roles {
+		if r, ok := roleMap[rid]; ok && r.Position > botHighestPos {
+			botHighestPos = r.Position
+		}
+	}
+
+	if targetRole.Position >= botHighestPos {
+		return fmt.Sprintf(
+			"<@&%s> (position %d) is **equal to or above** the bot's highest role (position %d).\n"+
+				"👉 Move the bot's role **above** <@&%s> in Server Settings → Roles.",
+			targetRole.ID, targetRole.Position,
+			botHighestPos, targetRole.ID,
+		)
+	}
