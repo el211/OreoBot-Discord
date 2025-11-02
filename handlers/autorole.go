@@ -194,3 +194,101 @@ func checkBotRoleHierarchy(s *discordgo.Session, guildID string, targetRole *dis
 			botHighestPos, targetRole.ID,
 		)
 	}
+	return ""
+}
+
+func AssignJoinRole(s *discordgo.Session, guildID, userID string) {
+	gs := storage.GetGuild(guildID)
+	gs.Lock()
+	ar := gs.AutoRole
+	gs.Unlock()
+
+	if !ar.Enabled || ar.RoleID == "" {
+		return
+	}
+
+	if err := s.GuildMemberRoleAdd(guildID, userID, ar.RoleID); err != nil {
+		slog.Error("autorole failed to assign role", "role_id", ar.RoleID, "user_id", userID, "guild_id", guildID, "error", err)
+	} else {
+		slog.Info("autorole assigned role", "role_id", ar.RoleID, "user_id", userID, "guild_id", guildID)
+	}
+}
+
+func (h *Handler) handleRoleMenuCommand(s *discordgo.Session, i *discordgo.InteractionCreate) {
+	if !h.isAdmin(s, i) {
+		respond(s, i, lang.T("no_permission"), true)
+		return
+	}
+	sub := i.ApplicationCommandData().Options[0]
+
+	switch sub.Name {
+	case "create":
+		handleRoleMenuCreate(s, i, sub.Options)
+	case "add":
+		handleRoleMenuAdd(s, i, sub.Options)
+	case "post":
+		handleRoleMenuPost(s, i, sub.Options)
+	case "list":
+		handleRoleMenuList(s, i)
+	case "delete":
+		handleRoleMenuDelete(s, i, sub.Options)
+	}
+}
+
+func handleRoleMenuCreate(s *discordgo.Session, i *discordgo.InteractionCreate, opts []*discordgo.ApplicationCommandInteractionDataOption) {
+	om := subOptMap(opts)
+	title := om["title"].StringValue()
+	desc := ""
+	if d, ok := om["description"]; ok {
+		desc = d.StringValue()
+	}
+	single := false
+	if sg, ok := om["single"]; ok {
+		single = sg.BoolValue()
+	}
+
+	gs := storage.GetGuild(i.GuildID)
+	gs.Lock()
+	menuID := fmt.Sprintf("menu%d", len(gs.RoleMenus)+1)
+	menu := config.RoleMenu{
+		ID:           menuID,
+		Title:        title,
+		Description:  desc,
+		SingleSelect: single,
+		Roles:        []config.RoleMenuEntry{},
+	}
+	gs.RoleMenus = append(gs.RoleMenus, menu)
+	gs.Unlock()
+	_ = gs.Save()
+
+	mode := "multi-select (members can hold multiple roles)"
+	if single {
+		mode = "single-select (selecting one removes the others)"
+	}
+	respond(s, i, lang.T("rolemenu_created",
+		"title", title,
+		"id", menuID,
+		"mode", mode,
+	), true)
+}
+
+func handleRoleMenuAdd(s *discordgo.Session, i *discordgo.InteractionCreate, opts []*discordgo.ApplicationCommandInteractionDataOption) {
+	om := subOptMap(opts)
+	menuID := om["menu_id"].StringValue()
+	role := om["role"].RoleValue(s, i.GuildID)
+	label := om["label"].StringValue()
+
+	gs := storage.GetGuild(i.GuildID)
+	gs.Lock()
+	found := false
+	for idx := range gs.RoleMenus {
+		if gs.RoleMenus[idx].ID == menuID {
+			if len(gs.RoleMenus[idx].Roles) >= 20 {
+				gs.Unlock()
+				respond(s, i, lang.T("rolemenu_max_roles"), true)
+				return
+			}
+			gs.RoleMenus[idx].Roles = append(gs.RoleMenus[idx].Roles, config.RoleMenuEntry{
+				RoleID: role.ID,
+				Label:  label,
+			})
