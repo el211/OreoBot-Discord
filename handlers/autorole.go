@@ -292,3 +292,101 @@ func handleRoleMenuAdd(s *discordgo.Session, i *discordgo.InteractionCreate, opt
 				RoleID: role.ID,
 				Label:  label,
 			})
+			found = true
+			break
+		}
+	}
+	gs.Unlock()
+
+	if !found {
+		respond(s, i, lang.T("rolemenu_not_found", "id", menuID), true)
+		return
+	}
+	_ = gs.Save()
+	respond(s, i, lang.T("rolemenu_role_added", "label", label, "role_id", role.ID, "id", menuID), true)
+}
+
+func handleRoleMenuPost(s *discordgo.Session, i *discordgo.InteractionCreate, opts []*discordgo.ApplicationCommandInteractionDataOption) {
+	om := subOptMap(opts)
+	menuID := om["menu_id"].StringValue()
+	ch := om["channel"].ChannelValue(s)
+
+	gs := storage.GetGuild(i.GuildID)
+	gs.Lock()
+
+	var menuCopy *config.RoleMenu
+	for idx := range gs.RoleMenus {
+		if gs.RoleMenus[idx].ID == menuID {
+			cp := gs.RoleMenus[idx]
+			menuCopy = &cp
+			break
+		}
+	}
+	if menuCopy == nil {
+		gs.Unlock()
+		respond(s, i, lang.T("rolemenu_not_found_short", "id", menuID), true)
+		return
+	}
+	if len(menuCopy.Roles) == 0 {
+		gs.Unlock()
+		respond(s, i, lang.T("rolemenu_no_roles"), true)
+		return
+	}
+	gs.Unlock()
+
+	embed := buildRoleMenuEmbed(menuCopy)
+	components := buildRoleMenuComponents(menuCopy)
+
+	msg, err := s.ChannelMessageSendComplex(ch.ID, &discordgo.MessageSend{
+		Embeds:     []*discordgo.MessageEmbed{embed},
+		Components: components,
+	})
+	if err != nil {
+		respond(s, i, lang.T("rolemenu_post_failed", "error", err.Error()), true)
+		return
+	}
+
+	gs.Lock()
+	for idx := range gs.RoleMenus {
+		if gs.RoleMenus[idx].ID == menuID {
+			gs.RoleMenus[idx].ChannelID = ch.ID
+			gs.RoleMenus[idx].MessageID = msg.ID
+			break
+		}
+	}
+	gs.Unlock()
+	_ = gs.Save()
+
+	respond(s, i, lang.T("rolemenu_posted", "title", menuCopy.Title, "channel_id", ch.ID), true)
+}
+
+func handleRoleMenuList(s *discordgo.Session, i *discordgo.InteractionCreate) {
+	gs := storage.GetGuild(i.GuildID)
+	gs.Lock()
+	menus := make([]config.RoleMenu, len(gs.RoleMenus))
+	copy(menus, gs.RoleMenus)
+	gs.Unlock()
+
+	if len(menus) == 0 {
+		respond(s, i, lang.T("rolemenu_none"), true)
+		return
+	}
+
+	var sb strings.Builder
+	sb.WriteString("📋 **Role Menus:**\n\n")
+	for _, m := range menus {
+		posted := "not posted yet"
+		if m.MessageID != "" {
+			posted = fmt.Sprintf("posted in <#%s>", m.ChannelID)
+		}
+		mode := "multi-select"
+		if m.SingleSelect {
+			mode = "single-select"
+		}
+		sb.WriteString(fmt.Sprintf("`%s` — **%s** | %d role(s) | %s | %s\n", m.ID, m.Title, len(m.Roles), mode, posted))
+	}
+	respond(s, i, sb.String(), true)
+}
+
+func handleRoleMenuDelete(s *discordgo.Session, i *discordgo.InteractionCreate, opts []*discordgo.ApplicationCommandInteractionDataOption) {
+	om := subOptMap(opts)
