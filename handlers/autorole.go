@@ -390,3 +390,101 @@ func handleRoleMenuList(s *discordgo.Session, i *discordgo.InteractionCreate) {
 
 func handleRoleMenuDelete(s *discordgo.Session, i *discordgo.InteractionCreate, opts []*discordgo.ApplicationCommandInteractionDataOption) {
 	om := subOptMap(opts)
+	menuID := om["menu_id"].StringValue()
+
+	gs := storage.GetGuild(i.GuildID)
+	gs.Lock()
+	found := false
+	newMenus := make([]config.RoleMenu, 0, len(gs.RoleMenus))
+	for _, m := range gs.RoleMenus {
+		if m.ID == menuID {
+			found = true
+			continue
+		}
+		newMenus = append(newMenus, m)
+	}
+	gs.RoleMenus = newMenus
+	gs.Unlock()
+
+	if !found {
+		respond(s, i, lang.T("rolemenu_not_found_delete", "id", menuID), true)
+		return
+	}
+	_ = gs.Save()
+	respond(s, i, lang.T("rolemenu_deleted", "id", menuID), true)
+}
+
+func HandleRoleMenuButton(s *discordgo.Session, i *discordgo.InteractionCreate) {
+	parts := strings.SplitN(i.MessageComponentData().CustomID, ":", 3)
+	if len(parts) != 3 {
+		return
+	}
+	menuID := parts[1]
+	roleID := parts[2]
+	userID := i.Member.User.ID
+
+	gs := storage.GetGuild(i.GuildID)
+	gs.Lock()
+	var menu *config.RoleMenu
+	for idx := range gs.RoleMenus {
+		if gs.RoleMenus[idx].ID == menuID {
+			menu = &gs.RoleMenus[idx]
+			break
+		}
+	}
+	if menu == nil {
+		gs.Unlock()
+		respond(s, i, lang.T("rolemenu_gone"), true)
+		return
+	}
+	isSingle := menu.SingleSelect
+	menuRoleIDs := make([]string, len(menu.Roles))
+	for idx, r := range menu.Roles {
+		menuRoleIDs[idx] = r.RoleID
+	}
+	gs.Unlock()
+
+	member, err := s.GuildMember(i.GuildID, userID)
+	if err != nil {
+		respond(s, i, lang.T("rolemenu_member_fetch_failed"), true)
+		return
+	}
+
+	hasRole := false
+	for _, rid := range member.Roles {
+		if rid == roleID {
+			hasRole = true
+			break
+		}
+	}
+
+	if hasRole {
+		_ = s.GuildMemberRoleRemove(i.GuildID, userID, roleID)
+		respond(s, i, lang.T("rolemenu_role_removed", "role_id", roleID), true)
+	} else {
+		if isSingle {
+			for _, rid := range menuRoleIDs {
+				if rid != roleID {
+					_ = s.GuildMemberRoleRemove(i.GuildID, userID, rid)
+				}
+			}
+		}
+		_ = s.GuildMemberRoleAdd(i.GuildID, userID, roleID)
+		respond(s, i, lang.T("rolemenu_role_given", "role_id", roleID), true)
+	}
+}
+
+func buildRoleMenuEmbed(menu *config.RoleMenu) *discordgo.MessageEmbed {
+	desc := menu.Description
+	if desc == "" {
+		desc = "Click a button below to get or remove a role."
+	}
+	if menu.SingleSelect {
+		desc += "\n\n> ℹ️ **Single-select:** Choosing one role will remove your current selection."
+	} else {
+		desc += "\n\n> ℹ️ **Multi-select:** You can pick multiple roles. Click a role again to remove it."
+	}
+
+	return &discordgo.MessageEmbed{
+		Title:       "🎭 " + menu.Title,
+		Description: desc,
