@@ -488,3 +488,27 @@ func buildRoleMenuEmbed(menu *config.RoleMenu) *discordgo.MessageEmbed {
 	return &discordgo.MessageEmbed{
 		Title:       "🎭 " + menu.Title,
 		Description: desc,
+		Color:       0x5865F2,
+	}
+}
+
+func buildRoleMenuComponents(menu *config.RoleMenu) []discordgo.MessageComponent {
+	var rows []discordgo.MessageComponent
+	var currentRow []discordgo.MessageComponent
+
+	for idx, r := range menu.Roles {
+		btn := discordgo.Button{
+			Label:    r.Label,
+			Style:    discordgo.PrimaryButton,
+			CustomID: fmt.Sprintf("rolemenu:%s:%s", menu.ID, r.RoleID),
+		}
+		currentRow = append(currentRow, btn)
+
+		if len(currentRow) == 5 || idx == len(menu.Roles)-1 {
+			rows = append(rows, discordgo.ActionsRow{Components: currentRow})
+			currentRow = nil
+		}
+	}
+
+	return rows
+}
