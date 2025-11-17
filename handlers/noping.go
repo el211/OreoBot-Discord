@@ -96,3 +96,101 @@ func (h *Handler) handleNoPingCommand(s *discordgo.Session, i *discordgo.Interac
 func handleNoPingWhitelist(s *discordgo.Session, i *discordgo.InteractionCreate, opts []*discordgo.ApplicationCommandInteractionDataOption) {
 	om := subOptMap(opts)
 	target := om["user"].UserValue(s)
+	gs := storage.GetGuild(i.GuildID)
+
+	gs.Lock()
+	if gs.NoPing.BypassUsers == nil {
+		gs.NoPing.BypassUsers = make(map[string]bool)
+	}
+	alreadyAllowed := gs.NoPing.BypassUsers[target.ID]
+	gs.NoPing.BypassUsers[target.ID] = true
+	gs.Unlock()
+
+	if err := gs.Save(); err != nil {
+		respond(s, i, fmt.Sprintf("Failed to save no-ping whitelist: `%s`", err.Error()), true)
+		return
+	}
+
+	if alreadyAllowed {
+		respond(s, i, fmt.Sprintf("<@%s> is already allowed to ping protected users/roles.", target.ID), true)
+		return
+	}
+	respond(s, i, fmt.Sprintf("<@%s> can now ping protected users/roles.", target.ID), true)
+}
+
+func handleNoPingBlacklist(s *discordgo.Session, i *discordgo.InteractionCreate, opts []*discordgo.ApplicationCommandInteractionDataOption) {
+	om := subOptMap(opts)
+	target := om["user"].UserValue(s)
+	gs := storage.GetGuild(i.GuildID)
+
+	gs.Lock()
+	wasAllowed := false
+	if gs.NoPing.BypassUsers != nil {
+		wasAllowed = gs.NoPing.BypassUsers[target.ID]
+		delete(gs.NoPing.BypassUsers, target.ID)
+	}
+	gs.Unlock()
+
+	if err := gs.Save(); err != nil {
+		respond(s, i, fmt.Sprintf("Failed to save no-ping whitelist: `%s`", err.Error()), true)
+		return
+	}
+
+	if !wasAllowed {
+		respond(s, i, fmt.Sprintf("<@%s> was not on the no-ping whitelist.", target.ID), true)
+		return
+	}
+	respond(s, i, fmt.Sprintf("<@%s> can no longer ping protected users/roles.", target.ID), true)
+}
+
+func handleNoPingList(s *discordgo.Session, i *discordgo.InteractionCreate) {
+	gs := storage.GetGuild(i.GuildID)
+
+	gs.Lock()
+	ids := make([]string, 0, len(gs.NoPing.BypassUsers))
+	for userID, allowed := range gs.NoPing.BypassUsers {
+		if allowed {
+			ids = append(ids, userID)
+		}
+	}
+	gs.Unlock()
+
+	if len(ids) == 0 {
+		respond(s, i, "No users are currently whitelisted for no-ping.", true)
+		return
+	}
+
+	sort.Strings(ids)
+	mentions := make([]string, 0, len(ids))
+	for _, id := range ids {
+		mentions = append(mentions, "<@"+id+">")
+	}
+	respond(s, i, "No-ping whitelist:\n"+strings.Join(mentions, "\n"), true)
+}
+
+func handleNoPing(s *discordgo.Session, m *discordgo.MessageCreate, cfg *config.NoPingConfig, protected map[string]bool, bypass map[string]bool) {
+	if m.Author == nil || m.Author.Bot || m.GuildID == "" {
+		return
+	}
+
+	if isNoPingUserBypassed(m.GuildID, m.Author.ID) {
+		return
+	}
+
+	if len(bypass) > 0 {
+		member, err := s.GuildMember(m.GuildID, m.Author.ID)
+		if err == nil {
+			for _, roleID := range member.Roles {
+				if bypass[roleID] {
+					return
+				}
+			}
+		}
+	}
+
+	for _, roleID := range m.MentionRoles {
+		if !protected[roleID] {
+			continue
+		}
+		roleName := roleID
+		if r, err := s.State.Role(m.GuildID, roleID); err == nil {
