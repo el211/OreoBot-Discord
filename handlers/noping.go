@@ -194,3 +194,101 @@ func handleNoPing(s *discordgo.Session, m *discordgo.MessageCreate, cfg *config.
 		}
 		roleName := roleID
 		if r, err := s.State.Role(m.GuildID, roleID); err == nil {
+			roleName = r.Name
+		}
+		triggerNoPing(s, m, cfg, roleName)
+		return
+	}
+
+	for _, mentioned := range m.Mentions {
+		if mentioned.ID == m.Author.ID {
+			continue
+		}
+		member, err := s.GuildMember(m.GuildID, mentioned.ID)
+		if err != nil {
+			continue
+		}
+		for _, roleID := range member.Roles {
+			if !protected[roleID] {
+				continue
+			}
+			roleName := roleID
+			if r, err := s.State.Role(m.GuildID, roleID); err == nil {
+				roleName = r.Name
+			}
+			triggerNoPing(s, m, cfg, roleName)
+			return
+		}
+	}
+}
+
+func isNoPingUserBypassed(guildID, userID string) bool {
+	gs := storage.GetGuild(guildID)
+	gs.Lock()
+	defer gs.Unlock()
+	return gs.NoPing.BypassUsers != nil && gs.NoPing.BypassUsers[userID]
+}
+
+func triggerNoPing(s *discordgo.Session, m *discordgo.MessageCreate, cfg *config.NoPingConfig, roleName string) {
+	if cfg.DeleteMessage {
+		_ = s.ChannelMessageDelete(m.ChannelID, m.ID)
+	}
+	msg := buildNoPingMessage(cfg.Message, m.Author.ID, roleName)
+	sendTemp(s, m.ChannelID, msg, 8)
+	logNoPing(s, m.Message, roleName)
+}
+
+func logNoPing(s *discordgo.Session, m *discordgo.Message, roleName string) {
+	gs := storage.GetGuild(m.GuildID)
+	logCh := config.EffectiveModLogChannel(storage.Cfg, gs)
+	if logCh == "" {
+		return
+	}
+
+	content := m.Content
+	if content == "" {
+		content = "*(no text content)*"
+	}
+	if len(content) > 1024 {
+		content = content[:1021] + "..."
+	}
+
+	embed := &discordgo.MessageEmbed{
+		Title: "NoPing: Message Deleted",
+		Color: 0xFFA500,
+		Fields: []*discordgo.MessageEmbedField{
+			{
+				Name:   "Author",
+				Value:  fmt.Sprintf("<@%s> - %s (`%s`)", m.Author.ID, m.Author.Username, m.Author.ID),
+				Inline: false,
+			},
+			{
+				Name:   "Channel",
+				Value:  fmt.Sprintf("<#%s>", m.ChannelID),
+				Inline: true,
+			},
+			{
+				Name:   "Protected Role Pinged",
+				Value:  roleName,
+				Inline: true,
+			},
+			{
+				Name:  "Message Content",
+				Value: content,
+			},
+		},
+		Footer:    &discordgo.MessageEmbedFooter{Text: fmt.Sprintf("Message ID: %s", m.ID)},
+		Timestamp: time.Now().Format(time.RFC3339),
+	}
+
+	_, _ = s.ChannelMessageSendEmbed(logCh, embed)
+}
+
+func buildNoPingMessage(template, userID, roleName string) string {
+	if template == "" {
+		template = "{user} You are not allowed to ping **{role}**!"
+	}
+	msg := strings.ReplaceAll(template, "{user}", "<@"+userID+">")
+	msg = strings.ReplaceAll(msg, "{role}", roleName)
+	return msg
+}
