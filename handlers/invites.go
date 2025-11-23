@@ -1,0 +1,98 @@
+package handlers
+
+import (
+	"fmt"
+	"log/slog"
+	"sync"
+
+	"discord-bot/storage"
+
+	"github.com/bwmarrin/discordgo"
+)
+
+var (
+	inviteCache   = make(map[string]map[string]int)
+	inviteCacheMu sync.Mutex
+)
+
+func (h *Handler) RegisterInviteTracker(s *discordgo.Session) {
+	s.AddHandler(func(s *discordgo.Session, e *discordgo.GuildCreate) {
+		cacheGuildInvites(s, e.Guild.ID)
+	})
+
+	s.AddHandler(func(s *discordgo.Session, e *discordgo.GuildMemberAdd) {
+		trackNewMember(s, e.GuildID, e.User)
+	})
+
+	s.AddHandler(func(s *discordgo.Session, e *discordgo.InviteCreate) {
+		cacheGuildInvites(s, e.GuildID)
+	})
+
+	s.AddHandler(func(s *discordgo.Session, e *discordgo.InviteDelete) {
+		cacheGuildInvites(s, e.GuildID)
+	})
+}
+
+func cacheGuildInvites(s *discordgo.Session, guildID string) {
+	invites, err := s.GuildInvites(guildID)
+	if err != nil {
+		slog.Error("failed to fetch invites", "guild_id", guildID, "error", err)
+		return
+	}
+
+	snapshot := make(map[string]int, len(invites))
+	for _, inv := range invites {
+		snapshot[inv.Code] = inv.Uses
+	}
+
+	inviteCacheMu.Lock()
+	inviteCache[guildID] = snapshot
+	inviteCacheMu.Unlock()
+}
+
+func trackNewMember(s *discordgo.Session, guildID string, user *discordgo.User) {
+	if user.Bot {
+		return
+	}
+
+	freshInvites, err := s.GuildInvites(guildID)
+	if err != nil {
+		slog.Error("failed to fetch invites on member join", "guild_id", guildID, "error", err)
+		return
+	}
+
+	inviteCacheMu.Lock()
+	old := inviteCache[guildID]
+	if old == nil {
+		old = make(map[string]int)
+	}
+
+	var inviterID string
+	newSnapshot := make(map[string]int, len(freshInvites))
+	for _, inv := range freshInvites {
+		newSnapshot[inv.Code] = inv.Uses
+		if inv.Uses > old[inv.Code] && inv.Inviter != nil {
+			inviterID = inv.Inviter.ID
+		}
+	}
+	inviteCache[guildID] = newSnapshot
+	inviteCacheMu.Unlock()
+
+	if inviterID == "" {
+		return
+	}
+
+	gs := storage.GetGuild(guildID)
+	gs.Lock()
+	gs.InviteCounts[inviterID]++
+	gs.Unlock()
+	if err := gs.Save(); err != nil {
+		slog.Error("failed to save invite count", "error", err)
+	}
+}
+
+func inviteCommands() []*discordgo.ApplicationCommand {
+	return []*discordgo.ApplicationCommand{
+		{
+			Name:        "invites",
+			Description: "Check how many invites a member has",
