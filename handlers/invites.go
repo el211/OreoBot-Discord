@@ -96,3 +96,71 @@ func inviteCommands() []*discordgo.ApplicationCommand {
 		{
 			Name:        "invites",
 			Description: "Check how many invites a member has",
+			Options: []*discordgo.ApplicationCommandOption{
+				{
+					Type:        discordgo.ApplicationCommandOptionUser,
+					Name:        "user",
+					Description: "User to check (defaults to yourself)",
+					Required:    false,
+				},
+			},
+		},
+		{
+			Name:        "resetinvites",
+			Description: "Reset a member's invite count to zero (admin only)",
+			Options: []*discordgo.ApplicationCommandOption{
+				{
+					Type:        discordgo.ApplicationCommandOptionUser,
+					Name:        "user",
+					Description: "User whose invites to reset",
+					Required:    true,
+				},
+			},
+		},
+	}
+}
+
+func (h *Handler) handleInvitesCommand(s *discordgo.Session, i *discordgo.InteractionCreate) {
+	opts := optionMap(i)
+
+	var targetUser *discordgo.User
+	if o, ok := opts["user"]; ok {
+		targetUser = o.UserValue(s)
+	} else {
+		targetUser = i.Member.User
+	}
+
+	gs := storage.GetGuild(i.GuildID)
+	gs.Lock()
+	count := gs.InviteCounts[targetUser.ID]
+	gs.Unlock()
+
+	embed := &discordgo.MessageEmbed{
+		Title:       "Invite Tracker",
+		Description: fmt.Sprintf("<@%s> has **%d** invite(s).", targetUser.ID, count),
+		Color:       0x5865F2,
+		Thumbnail:   &discordgo.MessageEmbedThumbnail{URL: targetUser.AvatarURL("64")},
+	}
+	respondEmbed(s, i, embed, false)
+}
+
+func (h *Handler) handleResetInvitesCommand(s *discordgo.Session, i *discordgo.InteractionCreate) {
+	if !h.isAdmin(s, i) {
+		respond(s, i, "You need administrator permissions to reset invites.", true)
+		return
+	}
+
+	opts := optionMap(i)
+	targetUser := opts["user"].UserValue(s)
+
+	gs := storage.GetGuild(i.GuildID)
+	gs.Lock()
+	gs.InviteCounts[targetUser.ID] = 0
+	gs.Unlock()
+	if err := gs.Save(); err != nil {
+		respond(s, i, "Failed to save: "+err.Error(), true)
+		return
+	}
+
+	respond(s, i, fmt.Sprintf("Reset invites for <@%s> to **0**.", targetUser.ID), false)
+}
