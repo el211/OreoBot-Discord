@@ -96,3 +96,101 @@ func handleGiveawayCreate(s *discordgo.Session, i *discordgo.InteractionCreate, 
 
 	om := subOptMap(opts)
 	ch := om["channel"].ChannelValue(s)
+	prize := om["prize"].StringValue()
+	durStr := om["duration"].StringValue()
+
+	winners := int64(1)
+	if w, ok := om["winners"]; ok {
+		winners = w.IntValue()
+		if winners < 1 {
+			winners = 1
+		}
+		if winners > 20 {
+			winners = 20
+		}
+	}
+
+	dur, err := parseDuration(durStr)
+	if err != nil || dur <= 0 {
+		followup(s, i, lang.T("giveaway_invalid_duration"))
+		return
+	}
+
+	endsAt := time.Now().Add(dur)
+	hostID := i.Member.User.ID
+
+	gs := storage.GetGuild(i.GuildID)
+
+	embed := buildGiveawayEmbed(prize, hostID, int(winners), endsAt, 0)
+	msg, err := s.ChannelMessageSendComplex(ch.ID, &discordgo.MessageSend{
+		Embeds: []*discordgo.MessageEmbed{embed},
+		Components: []discordgo.MessageComponent{
+			discordgo.ActionsRow{
+				Components: []discordgo.MessageComponent{
+					discordgo.Button{
+						Label:    lang.T("giveaway_embed_enter_btn"),
+						Style:    discordgo.PrimaryButton,
+						CustomID: "giveaway_enter:pending",
+					},
+				},
+			},
+		},
+	})
+	if err != nil {
+		followup(s, i, lang.T("giveaway_post_failed", "error", err.Error()))
+		return
+	}
+
+	giveawayID := msg.ID
+
+	_, _ = s.ChannelMessageEditComplex(&discordgo.MessageEdit{
+		Channel: ch.ID,
+		ID:      msg.ID,
+		Embeds:  &[]*discordgo.MessageEmbed{embed},
+		Components: &[]discordgo.MessageComponent{
+			discordgo.ActionsRow{
+				Components: []discordgo.MessageComponent{
+					discordgo.Button{
+						Label:    lang.T("giveaway_embed_enter_btn"),
+						Style:    discordgo.PrimaryButton,
+						CustomID: "giveaway_enter:" + giveawayID,
+					},
+				},
+			},
+		},
+	})
+
+	gw := config.Giveaway{
+		ID:         giveawayID,
+		GuildID:    i.GuildID,
+		ChannelID:  ch.ID,
+		MessageID:  msg.ID,
+		Prize:      prize,
+		Winners:    int(winners),
+		EndsAt:     endsAt.Format(time.RFC3339),
+		HostID:     hostID,
+		Ended:      false,
+		EntrantIDs: map[string]bool{},
+	}
+
+	gs.Lock()
+	gs.Giveaways = append(gs.Giveaways, gw)
+	gs.Unlock()
+	_ = gs.Save()
+
+	scheduleGiveaway(s, i.GuildID, giveawayID, dur)
+
+	followup(s, i, lang.T("giveaway_started",
+		"prize", prize,
+		"id", giveawayID,
+		"channel_id", ch.ID,
+		"timestamp", fmt.Sprintf("%d", endsAt.Unix()),
+		"winners", fmt.Sprintf("%d", winners),
+	))
+}
+
+func handleGiveawayEnd(s *discordgo.Session, i *discordgo.InteractionCreate, opts []*discordgo.ApplicationCommandInteractionDataOption) {
+	om := subOptMap(opts)
+	giveawayID := om["giveaway_id"].StringValue()
+
+	gs := storage.GetGuild(i.GuildID)
