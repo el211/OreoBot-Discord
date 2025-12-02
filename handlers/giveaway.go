@@ -194,3 +194,101 @@ func handleGiveawayEnd(s *discordgo.Session, i *discordgo.InteractionCreate, opt
 	giveawayID := om["giveaway_id"].StringValue()
 
 	gs := storage.GetGuild(i.GuildID)
+	gs.Lock()
+	var found *config.Giveaway
+	for idx := range gs.Giveaways {
+		if gs.Giveaways[idx].ID == giveawayID {
+			found = &gs.Giveaways[idx]
+			break
+		}
+	}
+	if found == nil {
+		gs.Unlock()
+		respond(s, i, lang.T("giveaway_not_found", "id", giveawayID), true)
+		return
+	}
+	if found.Ended {
+		gs.Unlock()
+		respond(s, i, lang.T("giveaway_already_ended"), true)
+		return
+	}
+	gs.Unlock()
+
+	cancelGiveawayTimer(i.GuildID, giveawayID)
+	endGiveaway(s, i.GuildID, giveawayID)
+	respond(s, i, lang.T("giveaway_ended_early", "id", giveawayID), true)
+}
+
+func handleGiveawayReroll(s *discordgo.Session, i *discordgo.InteractionCreate, opts []*discordgo.ApplicationCommandInteractionDataOption) {
+	om := subOptMap(opts)
+	giveawayID := om["giveaway_id"].StringValue()
+
+	gs := storage.GetGuild(i.GuildID)
+	gs.Lock()
+	var found *config.Giveaway
+	for idx := range gs.Giveaways {
+		if gs.Giveaways[idx].ID == giveawayID {
+			found = &gs.Giveaways[idx]
+			break
+		}
+	}
+	if found == nil {
+		gs.Unlock()
+		respond(s, i, lang.T("giveaway_not_found_short", "id", giveawayID), true)
+		return
+	}
+	if !found.Ended {
+		gs.Unlock()
+		respond(s, i, lang.T("giveaway_still_active"), true)
+		return
+	}
+	entrants := make([]string, 0, len(found.EntrantIDs))
+	for uid := range found.EntrantIDs {
+		entrants = append(entrants, uid)
+	}
+	numWinners := found.Winners
+	prevWinners := make([]string, len(found.WinnerIDs))
+	copy(prevWinners, found.WinnerIDs)
+	channelID := found.ChannelID
+	prize := found.Prize
+	gs.Unlock()
+
+	if len(entrants) == 0 {
+		respond(s, i, lang.T("giveaway_no_entrants"), true)
+		return
+	}
+
+	keptWinners := []string{}
+	keptSet := map[string]bool{}
+	if keepOpt, ok := om["keep"]; ok {
+		raw := strings.ReplaceAll(keepOpt.StringValue(), ",", " ")
+		prevWinnersSet := map[string]bool{}
+		for _, uid := range prevWinners {
+			prevWinnersSet[uid] = true
+		}
+		for _, token := range strings.Fields(raw) {
+			uid := ""
+			if strings.HasPrefix(token, "<@") && strings.HasSuffix(token, ">") {
+				uid = strings.TrimSuffix(strings.TrimPrefix(strings.TrimPrefix(token, "<@!"), "<@"), ">")
+			} else if _, err := strconv.ParseUint(token, 10, 64); err == nil {
+				uid = token
+			} else if n, err := strconv.Atoi(token); err == nil && n >= 1 && n <= numWinners {
+				if n-1 < len(prevWinners) {
+					uid = prevWinners[n-1]
+				}
+			}
+			if uid != "" && prevWinnersSet[uid] && !keptSet[uid] {
+				keptWinners = append(keptWinners, uid)
+				keptSet[uid] = true
+			}
+		}
+	}
+
+	if len(keptWinners) >= numWinners {
+		respond(s, i, lang.T("giveaway_reroll_nothing_to_reroll"), true)
+		return
+	}
+
+	filteredEntrants := make([]string, 0, len(entrants))
+	for _, uid := range entrants {
+		if !keptSet[uid] {
