@@ -292,3 +292,101 @@ func handleGiveawayReroll(s *discordgo.Session, i *discordgo.InteractionCreate, 
 	filteredEntrants := make([]string, 0, len(entrants))
 	for _, uid := range entrants {
 		if !keptSet[uid] {
+			filteredEntrants = append(filteredEntrants, uid)
+		}
+	}
+
+	numNew := numWinners - len(keptWinners)
+	if len(filteredEntrants) == 0 {
+		respond(s, i, lang.T("giveaway_no_entrants"), true)
+		return
+	}
+
+	newWinners := pickWinners(filteredEntrants, numNew)
+	allWinners := append(keptWinners, newWinners...)
+
+	gs.Lock()
+	for idx := range gs.Giveaways {
+		if gs.Giveaways[idx].ID == giveawayID {
+			gs.Giveaways[idx].WinnerIDs = allWinners
+			break
+		}
+	}
+	gs.Unlock()
+	_ = gs.Save()
+
+	newMentions := make([]string, len(newWinners))
+	for idx, w := range newWinners {
+		newMentions[idx] = fmt.Sprintf("<@%s>", w)
+	}
+	newMentionsStr := strings.Join(newMentions, ", ")
+
+	if len(keptWinners) == 0 {
+		_, _ = s.ChannelMessageSend(channelID, lang.T("giveaway_reroll_announce", "prize", prize, "mentions", newMentionsStr))
+		respond(s, i, lang.T("giveaway_rerolled", "mentions", newMentionsStr), true)
+	} else {
+		keptMentions := make([]string, len(keptWinners))
+		for idx, w := range keptWinners {
+			keptMentions[idx] = fmt.Sprintf("<@%s>", w)
+		}
+		keptMentionsStr := strings.Join(keptMentions, ", ")
+		_, _ = s.ChannelMessageSend(channelID, lang.T("giveaway_reroll_partial_announce",
+			"prize", prize,
+			"kept", keptMentionsStr,
+			"new", newMentionsStr,
+		))
+		respond(s, i, lang.T("giveaway_rerolled_partial",
+			"kept", keptMentionsStr,
+			"new", newMentionsStr,
+		), true)
+	}
+}
+
+func handleGiveawayList(s *discordgo.Session, i *discordgo.InteractionCreate) {
+	gs := storage.GetGuild(i.GuildID)
+	gs.Lock()
+	giveaways := make([]config.Giveaway, len(gs.Giveaways))
+	copy(giveaways, gs.Giveaways)
+	gs.Unlock()
+
+	var active []config.Giveaway
+	for _, gw := range giveaways {
+		if !gw.Ended {
+			active = append(active, gw)
+		}
+	}
+
+	if len(active) == 0 {
+		respond(s, i, lang.T("giveaway_none_active"), true)
+		return
+	}
+
+	var sb strings.Builder
+	sb.WriteString(lang.T("giveaway_list_header"))
+	for _, gw := range active {
+		endsAt, _ := time.Parse(time.RFC3339, gw.EndsAt)
+		sb.WriteString(lang.T("giveaway_list_entry",
+			"id", gw.ID,
+			"prize", gw.Prize,
+			"winners", fmt.Sprintf("%d", gw.Winners),
+			"entries", fmt.Sprintf("%d", len(gw.EntrantIDs)),
+			"timestamp", fmt.Sprintf("%d", endsAt.Unix()),
+			"channel_id", gw.ChannelID,
+		))
+	}
+	respond(s, i, sb.String(), true)
+}
+
+func HandleGiveawayEnter(s *discordgo.Session, i *discordgo.InteractionCreate) {
+	parts := strings.SplitN(i.MessageComponentData().CustomID, ":", 2)
+	if len(parts) != 2 {
+		return
+	}
+	giveawayID := parts[1]
+	userID := i.Member.User.ID
+
+	gs := storage.GetGuild(i.GuildID)
+	gs.Lock()
+
+	var gw *config.Giveaway
+	for idx := range gs.Giveaways {
