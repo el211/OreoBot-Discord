@@ -390,3 +390,101 @@ func HandleGiveawayEnter(s *discordgo.Session, i *discordgo.InteractionCreate) {
 
 	var gw *config.Giveaway
 	for idx := range gs.Giveaways {
+		if gs.Giveaways[idx].ID == giveawayID {
+			gw = &gs.Giveaways[idx]
+			break
+		}
+	}
+	if gw == nil || gw.Ended {
+		gs.Unlock()
+		respond(s, i, lang.T("giveaway_already_ended_btn"), true)
+		return
+	}
+	if gw.EntrantIDs == nil {
+		gw.EntrantIDs = make(map[string]bool)
+	}
+
+	if gw.EntrantIDs[userID] {
+		delete(gw.EntrantIDs, userID)
+		gs.Unlock()
+		_ = gs.Save()
+		go updateGiveawayMessage(s, i.GuildID, giveawayID)
+		respond(s, i, lang.T("giveaway_left"), true)
+	} else {
+		gw.EntrantIDs[userID] = true
+		gs.Unlock()
+		_ = gs.Save()
+		go updateGiveawayMessage(s, i.GuildID, giveawayID)
+		respond(s, i, lang.T("giveaway_entered"), true)
+	}
+}
+
+func updateGiveawayMessage(s *discordgo.Session, guildID, giveawayID string) {
+	gs := storage.GetGuild(guildID)
+	gs.Lock()
+	var gw *config.Giveaway
+	for idx := range gs.Giveaways {
+		if gs.Giveaways[idx].ID == giveawayID {
+			gw = &gs.Giveaways[idx]
+			break
+		}
+	}
+	if gw == nil {
+		gs.Unlock()
+		return
+	}
+	prize := gw.Prize
+	hostID := gw.HostID
+	winners := gw.Winners
+	endsAt, _ := time.Parse(time.RFC3339, gw.EndsAt)
+	entrantCount := len(gw.EntrantIDs)
+	channelID := gw.ChannelID
+	messageID := gw.MessageID
+	gs.Unlock()
+
+	embed := buildGiveawayEmbed(prize, hostID, winners, endsAt, entrantCount)
+	_, _ = s.ChannelMessageEditComplex(&discordgo.MessageEdit{
+		Channel: channelID,
+		ID:      messageID,
+		Embeds:  &[]*discordgo.MessageEmbed{embed},
+	})
+}
+
+func buildGiveawayEmbed(prize, hostID string, winners int, endsAt time.Time, entrants int) *discordgo.MessageEmbed {
+	winStr := lang.T("giveaway_embed_winner_singular")
+	if winners > 1 {
+		winStr = lang.T("giveaway_embed_winner_plural")
+	}
+	return &discordgo.MessageEmbed{
+		Title: lang.T("giveaway_embed_title"),
+		Description: lang.T("giveaway_embed_description",
+			"prize", prize,
+			"winners", fmt.Sprintf("%d", winners),
+			"winner_word", winStr,
+			"host_id", hostID,
+			"entries", fmt.Sprintf("%d", entrants),
+			"timestamp", fmt.Sprintf("%d", endsAt.Unix()),
+		),
+		Color: 0xFF73FA,
+		Footer: &discordgo.MessageEmbedFooter{
+			Text: lang.T("giveaway_embed_footer", "time", endsAt.UTC().Format("Jan 02, 2006 15:04")),
+		},
+		Timestamp: endsAt.Format(time.RFC3339),
+	}
+}
+
+func scheduleGiveaway(s *discordgo.Session, guildID, giveawayID string, dur time.Duration) {
+	key := guildID + ":" + giveawayID
+	t := time.AfterFunc(dur, func() {
+		endGiveaway(s, guildID, giveawayID)
+	})
+	giveawayTimersMu.Lock()
+	giveawayTimers[key] = t
+	giveawayTimersMu.Unlock()
+}
+
+func cancelGiveawayTimer(guildID, giveawayID string) {
+	key := guildID + ":" + giveawayID
+	giveawayTimersMu.Lock()
+	if t, ok := giveawayTimers[key]; ok {
+		t.Stop()
