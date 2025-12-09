@@ -488,3 +488,101 @@ func cancelGiveawayTimer(guildID, giveawayID string) {
 	giveawayTimersMu.Lock()
 	if t, ok := giveawayTimers[key]; ok {
 		t.Stop()
+		delete(giveawayTimers, key)
+	}
+	giveawayTimersMu.Unlock()
+}
+
+func endGiveaway(s *discordgo.Session, guildID, giveawayID string) {
+	gs := storage.GetGuild(guildID)
+	gs.Lock()
+	var gw *config.Giveaway
+	for idx := range gs.Giveaways {
+		if gs.Giveaways[idx].ID == giveawayID {
+			gw = &gs.Giveaways[idx]
+			break
+		}
+	}
+	if gw == nil || gw.Ended {
+		gs.Unlock()
+		return
+	}
+	gw.Ended = true
+
+	entrants := make([]string, 0, len(gw.EntrantIDs))
+	for uid := range gw.EntrantIDs {
+		entrants = append(entrants, uid)
+	}
+	numWinners := gw.Winners
+	channelID := gw.ChannelID
+	messageID := gw.MessageID
+	prize := gw.Prize
+	gs.Unlock()
+	_ = gs.Save()
+
+	endedEmbed := &discordgo.MessageEmbed{
+		Title: lang.T("giveaway_ended_embed_title"),
+		Description: lang.T("giveaway_ended_embed_description",
+			"prize", prize,
+			"entries", fmt.Sprintf("%d", len(entrants)),
+		),
+		Color: 0x808080,
+	}
+	_, _ = s.ChannelMessageEditComplex(&discordgo.MessageEdit{
+		Channel: channelID,
+		ID:      messageID,
+		Embeds:  &[]*discordgo.MessageEmbed{endedEmbed},
+		Components: &[]discordgo.MessageComponent{
+			discordgo.ActionsRow{
+				Components: []discordgo.MessageComponent{
+					discordgo.Button{
+						Label:    lang.T("giveaway_ended_btn_label"),
+						Style:    discordgo.SecondaryButton,
+						CustomID: "giveaway_ended_" + giveawayID,
+						Disabled: true,
+					},
+				},
+			},
+		},
+	})
+
+	if len(entrants) == 0 {
+		_, _ = s.ChannelMessageSend(channelID, lang.T("giveaway_no_entrants_end", "prize", prize))
+		return
+	}
+
+	winners := pickWinners(entrants, numWinners)
+	mentions := make([]string, len(winners))
+	for idx, w := range winners {
+		mentions[idx] = fmt.Sprintf("<@%s>", w)
+	}
+	mentionsStr := strings.Join(mentions, " ")
+
+	msg := lang.T("giveaway_winners_announce", "prize", prize, "mentions", mentionsStr) +
+		"\n\n" + lang.T("giveaway_reroll_hint", "id", giveawayID)
+	_, _ = s.ChannelMessageSend(channelID, msg)
+
+	gs.Lock()
+	for idx := range gs.Giveaways {
+		if gs.Giveaways[idx].ID == giveawayID {
+			gs.Giveaways[idx].WinnerIDs = winners
+			break
+		}
+	}
+	gs.Unlock()
+	_ = gs.Save()
+}
+
+func pickWinners(entrants []string, count int) []string {
+	if count >= len(entrants) {
+		return entrants
+	}
+	shuffled := make([]string, len(entrants))
+	copy(shuffled, entrants)
+	rand.Shuffle(len(shuffled), func(a, b int) {
+		shuffled[a], shuffled[b] = shuffled[b], shuffled[a]
+	})
+	return shuffled[:count]
+}
+
+func (h *Handler) RestoreGiveawayTimers(s *discordgo.Session, gs *config.GuildState) {
