@@ -586,3 +586,25 @@ func pickWinners(entrants []string, count int) []string {
 }
 
 func (h *Handler) RestoreGiveawayTimers(s *discordgo.Session, gs *config.GuildState) {
+	gs.Lock()
+	guildID := gs.GuildID
+	giveaways := make([]config.Giveaway, len(gs.Giveaways))
+	copy(giveaways, gs.Giveaways)
+	gs.Unlock()
+
+	for _, gw := range giveaways {
+		if gw.Ended {
+			continue
+		}
+		endsAt, err := time.Parse(time.RFC3339, gw.EndsAt)
+		if err != nil {
+			continue
+		}
+		remaining := time.Until(endsAt)
+		if remaining <= 0 {
+			go endGiveaway(s, guildID, gw.ID)
+		} else {
+			scheduleGiveaway(s, guildID, gw.ID, remaining)
+		}
+	}
+}
