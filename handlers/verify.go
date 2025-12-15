@@ -96,3 +96,24 @@ func (h *Handler) handleVerify(s *discordgo.Session, i *discordgo.InteractionCre
 		slog.Error("verify failed to assign role", "role_id", product.RoleID, "user_id", targetUser.ID, "error", err)
 		respond(s, i, fmt.Sprintf("Failed to assign role: %v", err), true)
 		return
+	}
+
+	gs := storage.GetGuild(i.GuildID)
+	logCh := config.EffectiveModLogChannel(h.cfg, gs)
+	if logCh != "" {
+		embed := &discordgo.MessageEmbed{
+			Title: "Verify: Role Assigned",
+			Color: 0x00CC66,
+			Fields: []*discordgo.MessageEmbedField{
+				{Name: "User", Value: fmt.Sprintf("<@%s> (`%s`)", targetUser.ID, targetUser.Username), Inline: true},
+				{Name: "Product", Value: product.Name, Inline: true},
+				{Name: "Role", Value: fmt.Sprintf("<@&%s>", product.RoleID), Inline: true},
+				{Name: "Verified by", Value: fmt.Sprintf("<@%s>", i.Member.User.ID), Inline: true},
+			},
+			Timestamp: time.Now().Format(time.RFC3339),
+		}
+		_, _ = s.ChannelMessageSendEmbed(logCh, embed)
+	}
+
+	respond(s, i, fmt.Sprintf("<@%s> has been verified for **%s** and granted <@&%s>!", targetUser.ID, product.Name, product.RoleID), false)
+}
