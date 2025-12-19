@@ -96,3 +96,101 @@ func ticketCommands() []*discordgo.ApplicationCommand {
 }
 
 func handleTicketCommand(s *discordgo.Session, i *discordgo.InteractionCreate) {
+	sub := i.ApplicationCommandData().Options[0]
+	switch sub.Name {
+	case "setup":
+		handleTicketSetup(s, i, sub.Options)
+	case "addcategory":
+		handleTicketAddCategory(s, i, sub.Options)
+	case "removecategory":
+		handleTicketRemoveCategory(s, i, sub.Options)
+	case "addsubcategory":
+		handleTicketAddSubcategory(s, i, sub.Options)
+	case "removesubcategory":
+		handleTicketRemoveSubcategory(s, i, sub.Options)
+	case "panel":
+		handleTicketPanel(s, i)
+	case "list":
+		handleTicketList(s, i)
+	case "config":
+		handleTicketConfigCmd(s, i)
+	}
+}
+
+func handleTicketSetup(s *discordgo.Session, i *discordgo.InteractionCreate, opts []*discordgo.ApplicationCommandInteractionDataOption) {
+	om := subOptMap(opts)
+	gs := storage.GetGuild(i.GuildID)
+
+	gs.Lock()
+	gs.TicketRuntime.PanelChannelOverride = om["channel"].ChannelValue(s).ID
+	gs.TicketRuntime.StaffRolesOverride = om["staff-roles"].StringValue()
+	if lc, ok := om["log-channel"]; ok {
+		gs.TicketRuntime.LogChannelOverride = lc.ChannelValue(s).ID
+	}
+	if cat, ok := om["category"]; ok {
+		gs.TicketRuntime.DiscordCategoryOverride = cat.ChannelValue(s).ID
+	}
+	gs.Unlock()
+	_ = gs.Save()
+
+	respond(s, i, lang.T("ticket_setup_done"), true)
+}
+
+func handleTicketAddCategory(s *discordgo.Session, i *discordgo.InteractionCreate, opts []*discordgo.ApplicationCommandInteractionDataOption) {
+	om := subOptMap(opts)
+	gs := storage.GetGuild(i.GuildID)
+
+	cat := config.TicketCategory{
+		ID:          om["id"].StringValue(),
+		Name:        om["name"].StringValue(),
+		Emoji:       om["emoji"].StringValue(),
+		Description: om["description"].StringValue(),
+	}
+
+	gs.Lock()
+	gs.TicketRuntime.ExtraCategories = append(gs.TicketRuntime.ExtraCategories, cat)
+	gs.Unlock()
+	_ = gs.Save()
+
+	respond(s, i, lang.T("ticket_category_added", "emoji", cat.Emoji, "name", cat.Name), true)
+}
+
+func handleTicketRemoveCategory(s *discordgo.Session, i *discordgo.InteractionCreate, opts []*discordgo.ApplicationCommandInteractionDataOption) {
+	om := subOptMap(opts)
+	id := om["id"].StringValue()
+	gs := storage.GetGuild(i.GuildID)
+
+	gs.Lock()
+	found := false
+	extras := gs.TicketRuntime.ExtraCategories
+	for idx, c := range extras {
+		if c.ID == id {
+			gs.TicketRuntime.ExtraCategories = append(extras[:idx], extras[idx+1:]...)
+			found = true
+			break
+		}
+	}
+	gs.Unlock()
+	_ = gs.Save()
+
+	if !found {
+		respond(s, i, lang.T("ticket_category_not_found_runtime", "id", id), true)
+		return
+	}
+	respond(s, i, lang.T("ticket_category_removed", "id", id), true)
+}
+
+func handleTicketAddSubcategory(s *discordgo.Session, i *discordgo.InteractionCreate, opts []*discordgo.ApplicationCommandInteractionDataOption) {
+	om := subOptMap(opts)
+	catID := om["category-id"].StringValue()
+	gs := storage.GetGuild(i.GuildID)
+
+	sub := config.TicketSubcategory{
+		ID:          om["id"].StringValue(),
+		Name:        om["name"].StringValue(),
+		Emoji:       om["emoji"].StringValue(),
+		Description: om["description"].StringValue(),
+	}
+
+	gs.Lock()
+	found := false
