@@ -194,3 +194,100 @@ func handleTicketAddSubcategory(s *discordgo.Session, i *discordgo.InteractionCr
 
 	gs.Lock()
 	found := false
+	for idx := range gs.TicketRuntime.ExtraCategories {
+		if gs.TicketRuntime.ExtraCategories[idx].ID == catID {
+			gs.TicketRuntime.ExtraCategories[idx].Subcategories = append(gs.TicketRuntime.ExtraCategories[idx].Subcategories, sub)
+			found = true
+			break
+		}
+	}
+	gs.Unlock()
+
+	if !found {
+		for _, c := range storage.Cfg.Tickets.Categories {
+			if c.ID == catID {
+				respond(s, i, lang.T("ticket_category_config_only", "id", catID), true)
+				return
+			}
+		}
+		respond(s, i, lang.T("ticket_category_not_found", "id", catID), true)
+		return
+	}
+
+	_ = gs.Save()
+	respond(s, i, lang.T("ticket_subcategory_added", "emoji", sub.Emoji, "name", sub.Name, "parent", catID), true)
+}
+
+func handleTicketRemoveSubcategory(s *discordgo.Session, i *discordgo.InteractionCreate, opts []*discordgo.ApplicationCommandInteractionDataOption) {
+	om := subOptMap(opts)
+	catID := om["category-id"].StringValue()
+	subID := om["id"].StringValue()
+	gs := storage.GetGuild(i.GuildID)
+
+	gs.Lock()
+	found := false
+	for ci := range gs.TicketRuntime.ExtraCategories {
+		if gs.TicketRuntime.ExtraCategories[ci].ID == catID {
+			subs := gs.TicketRuntime.ExtraCategories[ci].Subcategories
+			for si, sc := range subs {
+				if sc.ID == subID {
+					gs.TicketRuntime.ExtraCategories[ci].Subcategories = append(subs[:si], subs[si+1:]...)
+					found = true
+					break
+				}
+			}
+			break
+		}
+	}
+	gs.Unlock()
+	_ = gs.Save()
+
+	if !found {
+		respond(s, i, lang.T("ticket_subcategory_not_found"), true)
+		return
+	}
+	respond(s, i, lang.T("ticket_subcategory_removed", "id", subID), true)
+}
+
+func handleTicketPanel(s *discordgo.Session, i *discordgo.InteractionCreate) {
+	cfg := storage.Cfg
+	gs := storage.GetGuild(i.GuildID)
+
+	panelCh := config.EffectiveTicketPanelChannel(cfg, gs)
+	if panelCh == "" {
+		respond(s, i, lang.T("ticket_no_panel_channel"), true)
+		return
+	}
+
+	categories := config.MergedTicketCategories(cfg, gs)
+	if len(categories) == 0 {
+		respond(s, i, lang.T("ticket_no_categories"), true)
+		return
+	}
+
+	var desc strings.Builder
+	desc.WriteString(lang.T("ticket_panel_description") + "\n\n")
+	for _, cat := range categories {
+		desc.WriteString(fmt.Sprintf("%s **%s** — %s\n", cat.Emoji, cat.Name, cat.Description))
+		for _, sub := range cat.Subcategories {
+			desc.WriteString(fmt.Sprintf("   ↳ %s %s — %s\n", sub.Emoji, sub.Name, sub.Description))
+		}
+		desc.WriteString("\n")
+	}
+
+	embed := &discordgo.MessageEmbed{
+		Title:       lang.T("ticket_panel_title"),
+		Description: desc.String(),
+		Color:       0x5865F2,
+		Footer:      &discordgo.MessageEmbedFooter{Text: "Click the menu below to open a ticket"},
+	}
+
+	menuOpts := make([]discordgo.SelectMenuOption, 0, len(categories))
+	for _, cat := range categories {
+		menuOpts = append(menuOpts, discordgo.SelectMenuOption{
+			Label:       cat.Name,
+			Value:       cat.ID,
+			Description: cat.Description,
+			Emoji:       parseComponentEmoji(cat.Emoji),
+		})
+	}
