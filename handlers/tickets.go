@@ -291,3 +291,102 @@ func handleTicketPanel(s *discordgo.Session, i *discordgo.InteractionCreate) {
 			Emoji:       parseComponentEmoji(cat.Emoji),
 		})
 	}
+
+	msg, err := s.ChannelMessageSendComplex(panelCh, &discordgo.MessageSend{
+		Embeds: []*discordgo.MessageEmbed{embed},
+		Components: []discordgo.MessageComponent{
+			discordgo.ActionsRow{
+				Components: []discordgo.MessageComponent{
+					discordgo.SelectMenu{
+						MenuType:    discordgo.StringSelectMenu,
+						CustomID:    "ticket_category_select",
+						Placeholder: "Select a category...",
+						Options:     menuOpts,
+					},
+				},
+			},
+		},
+	})
+	if err != nil {
+		respond(s, i, lang.T("ticket_panel_send_failed", "error", err.Error()), true)
+		return
+	}
+
+	gs.Lock()
+	oldPanelID := gs.TicketRuntime.PanelMessageID
+	gs.Unlock()
+
+	if oldPanelID != "" {
+		_ = s.ChannelMessageDelete(panelCh, oldPanelID)
+	}
+
+	gs.Lock()
+	gs.TicketRuntime.PanelMessageID = msg.ID
+	gs.Unlock()
+	_ = gs.Save()
+
+	respond(s, i, lang.T("ticket_panel_posted"), true)
+}
+
+func handleTicketList(s *discordgo.Session, i *discordgo.InteractionCreate) {
+	gs := storage.GetGuild(i.GuildID)
+	gs.Lock()
+	tickets := make(map[string]config.Ticket, len(gs.TicketRuntime.OpenTickets))
+	for k, v := range gs.TicketRuntime.OpenTickets {
+		tickets[k] = v
+	}
+	gs.Unlock()
+
+	if len(tickets) == 0 {
+		respond(s, i, lang.T("ticket_no_open"), true)
+		return
+	}
+
+	var sb strings.Builder
+	sb.WriteString(fmt.Sprintf("**Open Tickets** (%d):\n", len(tickets)))
+	for _, t := range tickets {
+		sub := t.SubCategory
+		if sub == "" {
+			sub = "—"
+		}
+		sb.WriteString(fmt.Sprintf("• <#%s> — #%d by <@%s> [%s / %s]\n", t.ChannelID, t.Number, t.UserID, t.CategoryID, sub))
+	}
+	respond(s, i, sb.String(), true)
+}
+
+func handleTicketConfigCmd(s *discordgo.Session, i *discordgo.InteractionCreate) {
+	cfg := storage.Cfg
+	gs := storage.GetGuild(i.GuildID)
+	categories := config.MergedTicketCategories(cfg, gs)
+
+	gs.Lock()
+	panelChanOverride := gs.TicketRuntime.PanelChannelOverride
+	logChanOverride := gs.TicketRuntime.LogChannelOverride
+	staffRolesOverride := gs.TicketRuntime.StaffRolesOverride
+	extraCatCount := len(gs.TicketRuntime.ExtraCategories)
+	openTicketCount := len(gs.TicketRuntime.OpenTickets)
+	gs.Unlock()
+
+	var sb strings.Builder
+	sb.WriteString("**Ticket System Configuration**\n\n")
+	sb.WriteString("__From config.json:__\n")
+	sb.WriteString(fmt.Sprintf("Enabled: `%v`\n", cfg.Tickets.Enabled))
+	sb.WriteString(fmt.Sprintf("Panel Channel: `%s`\n", cfg.Tickets.PanelChannel))
+	sb.WriteString(fmt.Sprintf("Log Channel: `%s`\n", cfg.Tickets.LogChannel))
+	sb.WriteString(fmt.Sprintf("Staff Roles: `%s`\n", cfg.Tickets.StaffRoles))
+	sb.WriteString(fmt.Sprintf("Discord Category: `%s`\n", cfg.Tickets.DiscordCategory))
+	sb.WriteString(fmt.Sprintf("Max Open Per User: `%d`\n", cfg.Tickets.MaxOpenPerUser))
+	sb.WriteString(fmt.Sprintf("Config Categories: `%d`\n\n", len(cfg.Tickets.Categories)))
+	sb.WriteString("__Runtime Overrides:__\n")
+	sb.WriteString(fmt.Sprintf("Panel Channel: `%s`\n", panelChanOverride))
+	sb.WriteString(fmt.Sprintf("Log Channel: `%s`\n", logChanOverride))
+	sb.WriteString(fmt.Sprintf("Staff Roles: `%s`\n", staffRolesOverride))
+	sb.WriteString(fmt.Sprintf("Extra Categories: `%d`\n", extraCatCount))
+	sb.WriteString(fmt.Sprintf("Open Tickets: `%d`\n\n", openTicketCount))
+	sb.WriteString("__Effective (merged) Categories:__\n")
+	for _, cat := range categories {
+		staffInfo := ""
+		if cat.StaffRoles != "" {
+			staffInfo = fmt.Sprintf(" [staff: `%s`]", cat.StaffRoles)
+		}
+		sb.WriteString(fmt.Sprintf("• %s **%s** (`%s`)%s\n", cat.Emoji, cat.Name, cat.ID, staffInfo))
