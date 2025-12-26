@@ -390,3 +390,101 @@ func handleTicketConfigCmd(s *discordgo.Session, i *discordgo.InteractionCreate)
 			staffInfo = fmt.Sprintf(" [staff: `%s`]", cat.StaffRoles)
 		}
 		sb.WriteString(fmt.Sprintf("• %s **%s** (`%s`)%s\n", cat.Emoji, cat.Name, cat.ID, staffInfo))
+		for _, sub := range cat.Subcategories {
+			sb.WriteString(fmt.Sprintf("   ↳ %s %s (`%s`)\n", sub.Emoji, sub.Name, sub.ID))
+		}
+	}
+	respond(s, i, sb.String(), true)
+}
+
+func handleTicketCategorySelect(s *discordgo.Session, i *discordgo.InteractionCreate) {
+	data := i.MessageComponentData()
+	if len(data.Values) == 0 {
+		return
+	}
+	catID := data.Values[0]
+	cfg := storage.Cfg
+	gs := storage.GetGuild(i.GuildID)
+	categories := config.MergedTicketCategories(cfg, gs)
+
+	var cat *config.TicketCategory
+	for idx := range categories {
+		if categories[idx].ID == catID {
+			cat = &categories[idx]
+			break
+		}
+	}
+	if cat == nil {
+		respond(s, i, lang.T("ticket_category_select_not_found"), true)
+		return
+	}
+
+	if len(cat.Subcategories) > 0 {
+		opts := make([]discordgo.SelectMenuOption, 0, len(cat.Subcategories))
+		for _, sub := range cat.Subcategories {
+			opts = append(opts, discordgo.SelectMenuOption{
+				Label:       sub.Name,
+				Value:       catID + ":" + sub.ID,
+				Description: sub.Description,
+				Emoji:       parseComponentEmoji(sub.Emoji),
+			})
+		}
+
+		_ = s.InteractionRespond(i.Interaction, &discordgo.InteractionResponse{
+			Type: discordgo.InteractionResponseChannelMessageWithSource,
+			Data: &discordgo.InteractionResponseData{
+				Content: fmt.Sprintf("%s **%s** — Please select a more specific topic:", cat.Emoji, cat.Name),
+				Flags:   discordgo.MessageFlagsEphemeral,
+				Components: []discordgo.MessageComponent{
+					discordgo.ActionsRow{
+						Components: []discordgo.MessageComponent{
+							discordgo.SelectMenu{
+								MenuType:    discordgo.StringSelectMenu,
+								CustomID:    "ticket_subcategory_select",
+								Placeholder: "Select a subcategory...",
+								Options:     opts,
+							},
+						},
+					},
+				},
+			},
+		})
+		return
+	}
+
+	createTicket(s, i, catID, "")
+}
+
+func handleTicketSubcategorySelect(s *discordgo.Session, i *discordgo.InteractionCreate) {
+	data := i.MessageComponentData()
+	if len(data.Values) == 0 {
+		return
+	}
+	parts := strings.SplitN(data.Values[0], ":", 2)
+	catID := parts[0]
+	subID := ""
+	if len(parts) > 1 {
+		subID = parts[1]
+	}
+
+	createTicket(s, i, catID, subID)
+}
+
+func createTicket(s *discordgo.Session, i *discordgo.InteractionCreate, catID, subID string) {
+	cfg := storage.Cfg
+	gs := storage.GetGuild(i.GuildID)
+	userID := i.Member.User.ID
+
+	maxOpen := cfg.Tickets.MaxOpenPerUser
+	if maxOpen <= 0 {
+		maxOpen = 1
+	}
+	gs.Lock()
+	openCount := 0
+	for _, t := range gs.TicketRuntime.OpenTickets {
+		if t.UserID == userID {
+			openCount++
+		}
+	}
+	gs.Unlock()
+	if openCount >= maxOpen {
