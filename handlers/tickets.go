@@ -488,3 +488,100 @@ func createTicket(s *discordgo.Session, i *discordgo.InteractionCreate, catID, s
 	}
 	gs.Unlock()
 	if openCount >= maxOpen {
+		respond(s, i, lang.T("ticket_max_open",
+			"count", fmt.Sprintf("%d", openCount),
+			"max", fmt.Sprintf("%d", maxOpen),
+		), true)
+		return
+	}
+
+	gs.Lock()
+	gs.TicketRuntime.TicketCounter++
+	num := gs.TicketRuntime.TicketCounter
+	gs.Unlock()
+
+	channelName := fmt.Sprintf("ticket-%04d", num)
+	discordCat := config.EffectiveTicketCategory(cfg, gs)
+
+	globalRoles := config.EffectiveTicketStaffRoles(cfg, gs)
+	categories := config.MergedTicketCategories(cfg, gs)
+	var staffRoles []string
+	for idx := range categories {
+		if categories[idx].ID == catID {
+			staffRoles = config.CategoryStaffRoles(&categories[idx], globalRoles)
+			break
+		}
+	}
+	if len(staffRoles) == 0 {
+		staffRoles = globalRoles
+	}
+
+	overwrites := []*discordgo.PermissionOverwrite{
+		{ID: i.GuildID, Type: discordgo.PermissionOverwriteTypeRole, Deny: discordgo.PermissionViewChannel},
+		{
+			ID:    userID,
+			Type:  discordgo.PermissionOverwriteTypeMember,
+			Allow: discordgo.PermissionViewChannel | discordgo.PermissionSendMessages | discordgo.PermissionAttachFiles | discordgo.PermissionReadMessageHistory,
+		},
+	}
+	for _, roleID := range staffRoles {
+		overwrites = append(overwrites, &discordgo.PermissionOverwrite{
+			ID:    roleID,
+			Type:  discordgo.PermissionOverwriteTypeRole,
+			Allow: discordgo.PermissionViewChannel | discordgo.PermissionSendMessages | discordgo.PermissionAttachFiles | discordgo.PermissionReadMessageHistory | discordgo.PermissionManageMessages,
+		})
+	}
+
+	ch, err := s.GuildChannelCreateComplex(i.GuildID, discordgo.GuildChannelCreateData{
+		Name:                 channelName,
+		Type:                 discordgo.ChannelTypeGuildText,
+		ParentID:             discordCat,
+		PermissionOverwrites: overwrites,
+	})
+	if err != nil {
+		respond(s, i, lang.T("ticket_create_failed", "error", err.Error()), true)
+		return
+	}
+
+	catName := catID
+	subName := subID
+	for _, c := range categories {
+		if c.ID == catID {
+			catName = c.Emoji + " " + c.Name
+			for _, sc := range c.Subcategories {
+				if sc.ID == subID {
+					subName = sc.Emoji + " " + sc.Name
+				}
+			}
+		}
+	}
+
+	topicText := catName
+	if subName != "" && subName != subID {
+		topicText += " → " + subName
+	}
+
+	ticket := config.Ticket{
+		ChannelID:   ch.ID,
+		UserID:      userID,
+		CategoryID:  catID,
+		SubCategory: subID,
+		Number:      num,
+		CreatedAt:   time.Now().Format(time.RFC3339),
+	}
+	gs.Lock()
+	gs.TicketRuntime.OpenTickets[ch.ID] = ticket
+	gs.Unlock()
+	_ = gs.Save()
+
+	embed := &discordgo.MessageEmbed{
+		Title:       lang.T("ticket_welcome_title", "number", fmt.Sprintf("%04d", num)),
+		Description: lang.T("ticket_welcome_body", "user_id", userID, "category", topicText),
+		Color:       0x57F287,
+		Timestamp:   time.Now().Format(time.RFC3339),
+	}
+
+	pingContent := fmt.Sprintf("<@%s>", userID)
+	for _, roleID := range staffRoles {
+		pingContent += fmt.Sprintf(" | <@&%s>", roleID)
+	}
