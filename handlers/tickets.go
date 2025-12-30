@@ -585,3 +585,102 @@ func createTicket(s *discordgo.Session, i *discordgo.InteractionCreate, catID, s
 	for _, roleID := range staffRoles {
 		pingContent += fmt.Sprintf(" | <@&%s>", roleID)
 	}
+
+	_, _ = s.ChannelMessageSendComplex(ch.ID, &discordgo.MessageSend{
+		Content: pingContent,
+		Embeds:  []*discordgo.MessageEmbed{embed},
+		Components: []discordgo.MessageComponent{
+			discordgo.ActionsRow{
+				Components: []discordgo.MessageComponent{
+					discordgo.Button{
+						Label:    lang.T("ticket_close_btn_label"),
+						Style:    discordgo.DangerButton,
+						CustomID: "ticket_close_btn",
+					},
+				},
+			},
+		},
+	})
+
+	respond(s, i, lang.T("ticket_created", "channel_id", ch.ID), true)
+}
+
+func handleCloseCommand(s *discordgo.Session, i *discordgo.InteractionCreate) {
+	gs := storage.GetGuild(i.GuildID)
+	gs.Lock()
+	ticket, ok := gs.TicketRuntime.OpenTickets[i.ChannelID]
+	gs.Unlock()
+	if !ok {
+		respond(s, i, lang.T("ticket_not_ticket_channel"), true)
+		return
+	}
+
+	respond(s, i, lang.T("ticket_closing"), false)
+	go closeTicket(s, i.GuildID, i.ChannelID, i.Member.User, &ticket, gs)
+}
+
+func handleCloseButton(s *discordgo.Session, i *discordgo.InteractionCreate) {
+	gs := storage.GetGuild(i.GuildID)
+	gs.Lock()
+	_, ok := gs.TicketRuntime.OpenTickets[i.ChannelID]
+	gs.Unlock()
+	if !ok {
+		respond(s, i, lang.T("ticket_not_ticket_channel"), true)
+		return
+	}
+
+	_ = s.InteractionRespond(i.Interaction, &discordgo.InteractionResponse{
+		Type: discordgo.InteractionResponseChannelMessageWithSource,
+		Data: &discordgo.InteractionResponseData{
+			Content: lang.T("ticket_close_confirm_prompt"),
+			Flags:   discordgo.MessageFlagsEphemeral,
+			Components: []discordgo.MessageComponent{
+				discordgo.ActionsRow{
+					Components: []discordgo.MessageComponent{
+						discordgo.Button{Label: lang.T("ticket_close_confirm_btn"), Style: discordgo.DangerButton, CustomID: "ticket_close_confirm"},
+						discordgo.Button{Label: lang.T("ticket_close_cancel_btn"), Style: discordgo.SecondaryButton, CustomID: "ticket_close_cancel"},
+					},
+				},
+			},
+		},
+	})
+}
+
+func handleCloseConfirm(s *discordgo.Session, i *discordgo.InteractionCreate) {
+	gs := storage.GetGuild(i.GuildID)
+	gs.Lock()
+	ticket, ok := gs.TicketRuntime.OpenTickets[i.ChannelID]
+	gs.Unlock()
+	if !ok {
+		respond(s, i, lang.T("ticket_not_found"), true)
+		return
+	}
+
+	_ = s.InteractionRespond(i.Interaction, &discordgo.InteractionResponse{
+		Type: discordgo.InteractionResponseChannelMessageWithSource,
+		Data: &discordgo.InteractionResponseData{Content: "🔒 Closing ticket..."},
+	})
+
+	go closeTicket(s, i.GuildID, i.ChannelID, i.Member.User, &ticket, gs)
+}
+
+func handleCloseCancel(s *discordgo.Session, i *discordgo.InteractionCreate) {
+	_ = s.InteractionRespond(i.Interaction, &discordgo.InteractionResponse{
+		Type: discordgo.InteractionResponseUpdateMessage,
+		Data: &discordgo.InteractionResponseData{
+			Content:    lang.T("ticket_close_cancelled"),
+			Components: []discordgo.MessageComponent{},
+		},
+	})
+}
+
+func closeTicket(s *discordgo.Session, guildID, channelID string, closedBy *discordgo.User, ticket *config.Ticket, gs *config.GuildState) {
+	cfg := storage.Cfg
+	transcript := generateTranscript(s, channelID)
+
+	logCh := config.EffectiveTicketLogChannel(cfg, gs)
+	if logCh != "" {
+		embed := &discordgo.MessageEmbed{
+			Title: fmt.Sprintf("Ticket #%04d Closed", ticket.Number),
+			Color: 0xED4245,
+			Fields: []*discordgo.MessageEmbedField{
