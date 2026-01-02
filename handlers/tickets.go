@@ -684,3 +684,101 @@ func closeTicket(s *discordgo.Session, guildID, channelID string, closedBy *disc
 			Title: fmt.Sprintf("Ticket #%04d Closed", ticket.Number),
 			Color: 0xED4245,
 			Fields: []*discordgo.MessageEmbedField{
+				{Name: "Opened By", Value: fmt.Sprintf("<@%s>", ticket.UserID), Inline: true},
+				{Name: "Closed By", Value: fmt.Sprintf("<@%s>", closedBy.ID), Inline: true},
+				{Name: "Category", Value: ticket.CategoryID, Inline: true},
+				{Name: "Subcategory", Value: ticket.SubCategory, Inline: true},
+				{Name: "Opened At", Value: ticket.CreatedAt, Inline: true},
+			},
+			Timestamp: time.Now().Format(time.RFC3339),
+		}
+
+		_, _ = s.ChannelMessageSendComplex(logCh, &discordgo.MessageSend{
+			Embeds: []*discordgo.MessageEmbed{embed},
+			Files: []*discordgo.File{
+				{
+					Name:        fmt.Sprintf("ticket-%04d-transcript.txt", ticket.Number),
+					ContentType: "text/plain",
+					Reader:      strings.NewReader(transcript),
+				},
+			},
+		})
+	}
+
+	gs.Lock()
+	delete(gs.TicketRuntime.OpenTickets, channelID)
+	gs.Unlock()
+	_ = gs.Save()
+
+	time.Sleep(3 * time.Second)
+	_, _ = s.ChannelDelete(channelID)
+}
+
+func handleAddUser(s *discordgo.Session, i *discordgo.InteractionCreate) {
+	gs := storage.GetGuild(i.GuildID)
+	gs.Lock()
+	_, ok := gs.TicketRuntime.OpenTickets[i.ChannelID]
+	gs.Unlock()
+	if !ok {
+		respond(s, i, lang.T("ticket_not_ticket_channel"), true)
+		return
+	}
+
+	opts := optionMap(i)
+	target := opts["user"].UserValue(s)
+
+	err := s.ChannelPermissionSet(i.ChannelID, target.ID, discordgo.PermissionOverwriteTypeMember,
+		discordgo.PermissionViewChannel|discordgo.PermissionSendMessages|discordgo.PermissionReadMessageHistory, 0)
+	if err != nil {
+		respond(s, i, lang.T("ticket_add_user_failed", "error", err.Error()), true)
+		return
+	}
+	respond(s, i, lang.T("ticket_user_added", "user_id", target.ID), false)
+}
+
+func handleRemoveUser(s *discordgo.Session, i *discordgo.InteractionCreate) {
+	gs := storage.GetGuild(i.GuildID)
+	gs.Lock()
+	_, ok := gs.TicketRuntime.OpenTickets[i.ChannelID]
+	gs.Unlock()
+	if !ok {
+		respond(s, i, lang.T("ticket_not_ticket_channel"), true)
+		return
+	}
+
+	opts := optionMap(i)
+	target := opts["user"].UserValue(s)
+
+	err := s.ChannelPermissionDelete(i.ChannelID, target.ID)
+	if err != nil {
+		respond(s, i, lang.T("ticket_remove_user_failed", "error", err.Error()), true)
+		return
+	}
+	respond(s, i, lang.T("ticket_user_removed", "user_id", target.ID), false)
+}
+
+func generateTranscript(s *discordgo.Session, channelID string) string {
+	var sb strings.Builder
+	sb.WriteString("=== TICKET TRANSCRIPT ===\n\n")
+
+	msgs, err := s.ChannelMessages(channelID, 100, "", "", "")
+	if err != nil {
+		sb.WriteString("(Failed to fetch messages)\n")
+		return sb.String()
+	}
+
+	for idx := len(msgs) - 1; idx >= 0; idx-- {
+		m := msgs[idx]
+		ts := m.Timestamp.Format("2006-01-02 15:04:05")
+		sb.WriteString(fmt.Sprintf("[%s] %s: %s\n", ts, m.Author.Username, m.Content))
+		for _, a := range m.Attachments {
+			sb.WriteString(fmt.Sprintf("  📎 %s\n", a.URL))
+		}
+	}
+	return sb.String()
+}
+
+func parseComponentEmoji(emoji string) *discordgo.ComponentEmoji {
+	if emoji == "" {
+		return nil
+	}
