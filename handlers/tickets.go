@@ -782,3 +782,25 @@ func parseComponentEmoji(emoji string) *discordgo.ComponentEmoji {
 	if emoji == "" {
 		return nil
 	}
+	s := emoji
+	animated := false
+	if strings.HasPrefix(s, "<a:") {
+		s = strings.TrimPrefix(s, "<a:")
+		animated = true
+	} else if strings.HasPrefix(s, "<:") {
+		s = strings.TrimPrefix(s, "<:")
+	}
+	if strings.HasSuffix(s, ">") {
+		s = strings.TrimSuffix(s, ">")
+		parts := strings.SplitN(s, ":", 2)
+		if len(parts) == 2 && parts[1] != "" {
+			return &discordgo.ComponentEmoji{Name: parts[0], ID: parts[1], Animated: animated}
+		}
+	}
+	for _, r := range emoji {
+		if r > 127 {
+			return &discordgo.ComponentEmoji{Name: emoji}
+		}
+	}
+	return nil
+}
