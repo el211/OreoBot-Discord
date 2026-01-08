@@ -96,3 +96,101 @@ func commissionCommands() []*discordgo.ApplicationCommand {
 					Options: []*discordgo.ApplicationCommandOption{
 						{Type: discordgo.ApplicationCommandOptionUser, Name: "client", Description: "The client to invoice", Required: true},
 						{Type: discordgo.ApplicationCommandOptionNumber, Name: "amount", Description: "Invoice total (e.g. 50.00)", Required: true},
+						{Type: discordgo.ApplicationCommandOptionString, Name: "description", Description: "Service / work description", Required: true},
+						{Type: discordgo.ApplicationCommandOptionString, Name: "currency", Description: "Currency code — leave blank to use your configured default", Required: false, Autocomplete: true},
+						{Type: discordgo.ApplicationCommandOptionString, Name: "note", Description: "Additional note (e.g. Due in 7 days)", Required: false},
+					},
+				},
+				{
+					Name:        "list",
+					Description: "List all invoices for this server",
+					Type:        discordgo.ApplicationCommandOptionSubCommand,
+				},
+			},
+		},
+	}
+}
+
+func handleCommissionCommand(s *discordgo.Session, i *discordgo.InteractionCreate) {
+	sub := i.ApplicationCommandData().Options[0]
+	switch sub.Name {
+	case "setup":
+		handleCommissionSetup(s, i, sub.Options)
+	case "toggle":
+		handleCommissionToggle(s, i)
+	case "addservice":
+		handleCommissionAddService(s, i, sub.Options)
+	case "removeservice":
+		handleCommissionRemoveService(s, i, sub.Options)
+	case "panel":
+		handleCommissionPanel(s, i)
+	case "list":
+		handleCommissionList(s, i)
+	case "config":
+		handleCommissionConfig(s, i)
+	case "setcategory":
+		handleCommissionSetCategory(s, i, sub.Options)
+	case "setlogchannel":
+		handleCommissionSetLogChannel(s, i, sub.Options)
+	}
+}
+
+func handleInvoiceCommand(s *discordgo.Session, i *discordgo.InteractionCreate) {
+	sub := i.ApplicationCommandData().Options[0]
+	switch sub.Name {
+	case "create":
+		handleInvoiceCreate(s, i, sub.Options)
+	case "list":
+		handleInvoiceList(s, i)
+	}
+}
+
+func handleCommissionSetup(s *discordgo.Session, i *discordgo.InteractionCreate, opts []*discordgo.ApplicationCommandInteractionDataOption) {
+	om := subOptMap(opts)
+	gs := storage.GetGuild(i.GuildID)
+
+	gs.Lock()
+	gs.CommissionsRuntime.PanelChannelOverride = om["channel"].ChannelValue(s).ID
+	gs.CommissionsRuntime.PayPalEmail = om["paypal-email"].StringValue()
+	if v, ok := om["paypal-me"]; ok {
+		gs.CommissionsRuntime.PayPalMeUser = strings.TrimPrefix(v.StringValue(), "paypal.me/")
+	}
+	if v, ok := om["category"]; ok {
+		gs.CommissionsRuntime.DiscordCategoryOverride = v.ChannelValue(s).ID
+	}
+	if v, ok := om["log-channel"]; ok {
+		gs.CommissionsRuntime.LogChannelOverride = v.ChannelValue(s).ID
+	}
+	if v, ok := om["staff-roles"]; ok {
+		gs.CommissionsRuntime.StaffRolesOverride = v.StringValue()
+	}
+	gs.CommissionsRuntime.Enabled = true
+	gs.Unlock()
+	_ = gs.Save()
+
+	respond(s, i, "✅ Commissions system configured and **enabled**. Use `/commission addservice` to add service types, then `/commission panel` to post the panel.", true)
+}
+
+func handleCommissionToggle(s *discordgo.Session, i *discordgo.InteractionCreate) {
+	gs := storage.GetGuild(i.GuildID)
+	gs.Lock()
+	gs.CommissionsRuntime.Enabled = !gs.CommissionsRuntime.Enabled
+	enabled := gs.CommissionsRuntime.Enabled
+	gs.Unlock()
+	_ = gs.Save()
+
+	if enabled {
+		respond(s, i, "✅ Commissions are now **open**. The panel button will allow new orders.", true)
+	} else {
+		respond(s, i, "🔒 Commissions are now **closed**. The panel button will reject new orders.", true)
+	}
+}
+
+func handleCommissionAddService(s *discordgo.Session, i *discordgo.InteractionCreate, opts []*discordgo.ApplicationCommandInteractionDataOption) {
+	om := subOptMap(opts)
+	gs := storage.GetGuild(i.GuildID)
+
+	svc := config.CommissionService{
+		ID:          om["id"].StringValue(),
+		Name:        om["name"].StringValue(),
+		Emoji:       om["emoji"].StringValue(),
