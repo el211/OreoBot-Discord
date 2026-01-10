@@ -194,3 +194,101 @@ func handleCommissionAddService(s *discordgo.Session, i *discordgo.InteractionCr
 		ID:          om["id"].StringValue(),
 		Name:        om["name"].StringValue(),
 		Emoji:       om["emoji"].StringValue(),
+		Description: om["description"].StringValue(),
+	}
+	if v, ok := om["starting-price"]; ok {
+		svc.StartingPrice = v.StringValue()
+	}
+
+	gs.Lock()
+	replaced := false
+	for idx, existing := range gs.CommissionsRuntime.Services {
+		if existing.ID == svc.ID {
+			gs.CommissionsRuntime.Services[idx] = svc
+			replaced = true
+			break
+		}
+	}
+	if !replaced {
+		gs.CommissionsRuntime.Services = append(gs.CommissionsRuntime.Services, svc)
+	}
+	gs.Unlock()
+	_ = gs.Save()
+
+	verb := "added"
+	if replaced {
+		verb = "updated"
+	}
+	respond(s, i, fmt.Sprintf("✅ Service %s **%s** %s.", svc.Emoji, svc.Name, verb), true)
+}
+
+func handleCommissionRemoveService(s *discordgo.Session, i *discordgo.InteractionCreate, opts []*discordgo.ApplicationCommandInteractionDataOption) {
+	om := subOptMap(opts)
+	id := om["id"].StringValue()
+	gs := storage.GetGuild(i.GuildID)
+
+	gs.Lock()
+	found := false
+	svcs := gs.CommissionsRuntime.Services
+	for idx, svc := range svcs {
+		if svc.ID == id {
+			gs.CommissionsRuntime.Services = append(svcs[:idx], svcs[idx+1:]...)
+			found = true
+			break
+		}
+	}
+	gs.Unlock()
+	_ = gs.Save()
+
+	if !found {
+		respond(s, i, fmt.Sprintf("❌ No runtime service with ID `%s` found. Config-file services cannot be removed at runtime.", id), true)
+		return
+	}
+	respond(s, i, fmt.Sprintf("🗑️ Service `%s` removed.", id), true)
+}
+
+func handleCommissionPanel(s *discordgo.Session, i *discordgo.InteractionCreate) {
+	cfg := storage.Cfg
+	gs := storage.GetGuild(i.GuildID)
+
+	panelCh := config.EffectiveCommissionPanelChannel(cfg, gs)
+	if panelCh == "" {
+		respond(s, i, "❌ No panel channel configured. Run `/commission setup` first.", true)
+		return
+	}
+
+	services := config.MergedCommissionServices(cfg, gs)
+
+	gs.Lock()
+	enabled := gs.CommissionsRuntime.Enabled
+	oldMsgID := gs.CommissionsRuntime.PanelMessageID
+	gs.Unlock()
+
+	embed := buildCommissionPanelEmbed(gs, services, enabled)
+
+	statusLabel := "Order Here"
+	statusStyle := discordgo.SuccessButton
+	if !enabled {
+		statusLabel = "Commissions Closed"
+		statusStyle = discordgo.DangerButton
+	}
+
+	msg, err := s.ChannelMessageSendComplex(panelCh, &discordgo.MessageSend{
+		Embeds: []*discordgo.MessageEmbed{embed},
+		Components: []discordgo.MessageComponent{
+			discordgo.ActionsRow{
+				Components: []discordgo.MessageComponent{
+					discordgo.Button{
+						Label:    statusLabel,
+						Style:    statusStyle,
+						CustomID: "commission_order",
+						Emoji:    &discordgo.ComponentEmoji{Name: "📋"},
+					},
+				},
+			},
+		},
+	})
+	if err != nil {
+		respond(s, i, fmt.Sprintf("❌ Failed to send panel: %s", err.Error()), true)
+		return
+	}
