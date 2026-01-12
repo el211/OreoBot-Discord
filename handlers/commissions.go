@@ -292,3 +292,101 @@ func handleCommissionPanel(s *discordgo.Session, i *discordgo.InteractionCreate)
 		respond(s, i, fmt.Sprintf("❌ Failed to send panel: %s", err.Error()), true)
 		return
 	}
+
+	gs.Lock()
+	gs.CommissionsRuntime.PanelMessageID = msg.ID
+	gs.Unlock()
+	_ = gs.Save()
+
+	if oldMsgID != "" {
+		_ = s.ChannelMessageDelete(panelCh, oldMsgID)
+	}
+
+	respond(s, i, "✅ Commissions panel posted.", true)
+}
+
+func buildCommissionPanelEmbed(gs *config.GuildState, services []config.CommissionService, enabled bool) *discordgo.MessageEmbed {
+	cfg := storage.Cfg
+
+	statusLine := "🟢 **Status: Open** — Accepting new orders!"
+	if !enabled {
+		statusLine = "🔴 **Status: Closed** — Not accepting orders at this time."
+	}
+
+	var desc strings.Builder
+	desc.WriteString(statusLine + "\n\n")
+
+	if len(services) == 0 {
+		desc.WriteString("*No services listed yet.*\n")
+	} else {
+		desc.WriteString("**Available Services**\n")
+		desc.WriteString("━━━━━━━━━━━━━━━━━━━━━━\n\n")
+		for _, svc := range services {
+			desc.WriteString(fmt.Sprintf("%s **%s**\n", svc.Emoji, svc.Name))
+			desc.WriteString(fmt.Sprintf("┃ %s\n", svc.Description))
+			if svc.StartingPrice != "" {
+				desc.WriteString(fmt.Sprintf("┃ 💰 %s\n", svc.StartingPrice))
+			}
+			desc.WriteString("\n")
+		}
+		desc.WriteString("━━━━━━━━━━━━━━━━━━━━━━\n\n")
+	}
+
+	desc.WriteString("> 📬 Click **Order Here** to open a private commission ticket.\n")
+	desc.WriteString("> You will be asked to fill out a short order form.")
+
+	embed := &discordgo.MessageEmbed{
+		Title:       "📋 Commissions",
+		Description: desc.String(),
+		Color:       0x5865F2,
+	}
+	if footer := payments.FooterText(cfg, gs); footer != "" {
+		embed.Footer = &discordgo.MessageEmbedFooter{Text: footer}
+	}
+	return embed
+}
+
+func handleCommissionList(s *discordgo.Session, i *discordgo.InteractionCreate) {
+	gs := storage.GetGuild(i.GuildID)
+	gs.Lock()
+	count := len(gs.CommissionsRuntime.OpenCommissions)
+	var sb strings.Builder
+	if count > 0 {
+		sb.WriteString(fmt.Sprintf("**Open Commissions** (%d):\n", count))
+		for _, ct := range gs.CommissionsRuntime.OpenCommissions {
+			sb.WriteString(fmt.Sprintf("• <#%s> — #%d by <@%s> [%s]\n", ct.ChannelID, ct.Number, ct.UserID, ct.ServiceName))
+		}
+	}
+	gs.Unlock()
+
+	if count == 0 {
+		respond(s, i, "📭 No open commissions.", true)
+		return
+	}
+	respond(s, i, sb.String(), true)
+}
+
+func handleCommissionConfig(s *discordgo.Session, i *discordgo.InteractionCreate) {
+	cfg := storage.Cfg
+	gs := storage.GetGuild(i.GuildID)
+	gs.Lock()
+	cr := gs.CommissionsRuntime
+	gs.Unlock()
+
+	services := config.MergedCommissionServices(cfg, gs)
+
+	var sb strings.Builder
+	sb.WriteString("**Commissions System Configuration**\n\n")
+	sb.WriteString(fmt.Sprintf("Enabled: `%v`\n", cr.Enabled))
+	sb.WriteString(fmt.Sprintf("Panel Channel: `%s`\n", cr.PanelChannelOverride))
+	sb.WriteString(fmt.Sprintf("Log Channel: `%s`\n", cr.LogChannelOverride))
+	sb.WriteString(fmt.Sprintf("Staff Roles: `%s`\n", cr.StaffRolesOverride))
+	sb.WriteString(fmt.Sprintf("Discord Category: `%s`\n", cr.DiscordCategoryOverride))
+	sb.WriteString(fmt.Sprintf("PayPal Email: `%s`\n", cr.PayPalEmail))
+	sb.WriteString(fmt.Sprintf("PayPal.me User: `%s`\n", cr.PayPalMeUser))
+	sb.WriteString(fmt.Sprintf("Open Commissions: `%d`\n", len(cr.OpenCommissions)))
+	sb.WriteString(fmt.Sprintf("Total Invoices: `%d`\n\n", len(cr.Invoices)))
+	sb.WriteString("__Services:__\n")
+	for _, svc := range services {
+		price := ""
+		if svc.StartingPrice != "" {
