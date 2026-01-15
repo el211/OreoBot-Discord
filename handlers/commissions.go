@@ -390,3 +390,43 @@ func handleCommissionConfig(s *discordgo.Session, i *discordgo.InteractionCreate
 	for _, svc := range services {
 		price := ""
 		if svc.StartingPrice != "" {
+			price = fmt.Sprintf(" — %s", svc.StartingPrice)
+		}
+		sb.WriteString(fmt.Sprintf("• %s **%s** (`%s`)%s\n", svc.Emoji, svc.Name, svc.ID, price))
+	}
+	if len(services) == 0 {
+		sb.WriteString("*No services configured.*\n")
+	}
+
+	respond(s, i, sb.String(), true)
+}
+
+func handleCommissionSetCategory(s *discordgo.Session, i *discordgo.InteractionCreate, opts []*discordgo.ApplicationCommandInteractionDataOption) {
+	om := subOptMap(opts)
+	id := strings.TrimSpace(om["id"].StringValue())
+	if !config.IsSnowflake(id) {
+		respond(s, i, "❌ That doesn't look like a valid Discord snowflake ID. Right-click the category and choose **Copy ID** (Developer Mode must be on).", true)
+		return
+	}
+	gs := storage.GetGuild(i.GuildID)
+	gs.Lock()
+	gs.CommissionsRuntime.DiscordCategoryOverride = id
+	gs.Unlock()
+	_ = gs.Save()
+	respond(s, i, fmt.Sprintf("✅ Commission category set to `%s`. New commission channels will be created inside that category.", id), true)
+}
+
+func handleCommissionSetLogChannel(s *discordgo.Session, i *discordgo.InteractionCreate, opts []*discordgo.ApplicationCommandInteractionDataOption) {
+	om := subOptMap(opts)
+	id := strings.TrimSpace(om["id"].StringValue())
+	if !config.IsSnowflake(id) {
+		respond(s, i, "❌ That doesn't look like a valid Discord snowflake ID. Right-click the channel and choose **Copy ID**.", true)
+		return
+	}
+	gs := storage.GetGuild(i.GuildID)
+	gs.Lock()
+	gs.CommissionsRuntime.LogChannelOverride = id
+	gs.Unlock()
+	_ = gs.Save()
+	respond(s, i, fmt.Sprintf("✅ Commission log channel set to <#%s>.", id), true)
+}
