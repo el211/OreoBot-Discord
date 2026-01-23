@@ -96,3 +96,34 @@ func commissionLogComponents(guildID, ticketChannelID, threadID string, allowQuo
 		buttons = append(buttons, discordgo.Button{Label: "View Commission", Style: discordgo.LinkButton, URL: discordChannelURL(guildID, ticketChannelID)})
 	}
 	if allowQuote {
+		buttons = append(buttons, discordgo.Button{Label: "Send Quote", Style: discordgo.PrimaryButton, CustomID: "commission_quote_btn:" + ticketChannelID})
+	}
+	if threadID != "" {
+		buttons = append(buttons, discordgo.Button{Label: "Open Thread", Style: discordgo.LinkButton, URL: discordChannelURL(guildID, threadID)})
+	}
+	if len(buttons) == 0 {
+		return nil
+	}
+	return []discordgo.MessageComponent{discordgo.ActionsRow{Components: buttons}}
+}
+
+func discordChannelURL(guildID, channelID string) string {
+	return fmt.Sprintf("https://discord.com/channels/%s/%s", guildID, channelID)
+}
+
+func formatCommissionInitialThreadMessage(ct *config.CommissionTicket) string {
+	parts := []string{
+		fmt.Sprintf("Commission brief for #%04d", ct.Number),
+		fmt.Sprintf("Client: <@%s>", ct.UserID),
+		fmt.Sprintf("Service: %s", ct.ServiceName),
+		fmt.Sprintf("Budget: %s", safeEmbedValue(ct.Budget)),
+		fmt.Sprintf("Timeframe: %s", safeEmbedValue(ct.Timeline)),
+		"Project Description:",
+		safeEmbedValue(ct.Details),
+	}
+	if strings.TrimSpace(ct.Notes) != "" {
+		parts = append(parts, "Additional Notes:", safeEmbedValue(ct.Notes))
+	}
+	parts = append(parts, "", "When the buyer writes in their private ticket, their message will appear here. Reply directly to a mirrored client message to send your response back to the buyer. Use Send Quote on the log message to quote the job.")
+	return truncateMessage(strings.Join(parts, "\n"), 1900)
+}
