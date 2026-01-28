@@ -96,3 +96,101 @@ func handleCommissionServiceSelect(s *discordgo.Session, i *discordgo.Interactio
 		respond(s, i, "❌ That service no longer exists. Please try again.", true)
 		return
 	}
+
+	modalTitle := fmt.Sprintf("Order — %s %s", svc.Emoji, svc.Name)
+	if len(modalTitle) > 45 {
+		modalTitle = modalTitle[:45]
+	}
+
+	_ = s.InteractionRespond(i.Interaction, &discordgo.InteractionResponse{
+		Type: discordgo.InteractionResponseModal,
+		Data: &discordgo.InteractionResponseData{
+			CustomID: "commission_form:" + serviceID,
+			Title:    modalTitle,
+			Components: []discordgo.MessageComponent{
+				discordgo.ActionsRow{Components: []discordgo.MessageComponent{
+					discordgo.TextInput{
+						CustomID:    "details",
+						Label:       "What do you want commissioned?",
+						Style:       discordgo.TextInputParagraph,
+						Required:    true,
+						Placeholder: "Describe exactly what you need. The more detail the better!",
+						MinLength:   20,
+						MaxLength:   1000,
+					},
+				}},
+				discordgo.ActionsRow{Components: []discordgo.MessageComponent{
+					discordgo.TextInput{
+						CustomID:    "budget",
+						Label:       "Your Budget",
+						Style:       discordgo.TextInputShort,
+						Required:    true,
+						Placeholder: "e.g. $50–$100 or open to quote",
+						MaxLength:   100,
+					},
+				}},
+				discordgo.ActionsRow{Components: []discordgo.MessageComponent{
+					discordgo.TextInput{
+						CustomID:    "timeline",
+						Label:       "Timeline / Deadline",
+						Style:       discordgo.TextInputShort,
+						Required:    true,
+						Placeholder: "e.g. 2 weeks, ASAP, by Dec 1",
+						MaxLength:   100,
+					},
+				}},
+				discordgo.ActionsRow{Components: []discordgo.MessageComponent{
+					discordgo.TextInput{
+						CustomID:    "notes",
+						Label:       "Additional Notes (optional)",
+						Style:       discordgo.TextInputParagraph,
+						Required:    false,
+						Placeholder: "Anything else we should know? References, examples, etc.",
+						MaxLength:   500,
+					},
+				}},
+			},
+		},
+	})
+}
+
+func handleCommissionFormSubmit(s *discordgo.Session, i *discordgo.InteractionCreate) {
+	data := i.ModalSubmitData()
+	serviceID := strings.TrimPrefix(data.CustomID, "commission_form:")
+
+	fields := modalTextValues(data.Components)
+	details := strings.TrimSpace(fields["details"])
+	budget := strings.TrimSpace(fields["budget"])
+	timeline := strings.TrimSpace(fields["timeline"])
+	notes := strings.TrimSpace(fields["notes"])
+
+	if details == "" || budget == "" || timeline == "" {
+		slog.Warn("commission modal empty fields", "user_id", i.Member.User.ID, "service_id", serviceID)
+	}
+
+	cfg := storage.Cfg
+	gs := storage.GetGuild(i.GuildID)
+	services := config.MergedCommissionServices(cfg, gs)
+
+	var svc *config.CommissionService
+	for idx := range services {
+		if services[idx].ID == serviceID {
+			svc = &services[idx]
+			break
+		}
+	}
+	serviceName := serviceID
+	serviceEmoji := ""
+	if svc != nil {
+		serviceName = svc.Name
+		serviceEmoji = svc.Emoji
+	}
+
+	createCommissionChannel(s, i, serviceID, serviceName, serviceEmoji, details, budget, timeline, notes)
+}
+
+func createCommissionChannel(
+	s *discordgo.Session,
+	i *discordgo.InteractionCreate,
+	serviceID, serviceName, serviceEmoji,
+	details, budget, timeline, notes string,
