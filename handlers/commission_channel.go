@@ -194,3 +194,101 @@ func createCommissionChannel(
 	i *discordgo.InteractionCreate,
 	serviceID, serviceName, serviceEmoji,
 	details, budget, timeline, notes string,
+) {
+	cfg := storage.Cfg
+	gs := storage.GetGuild(i.GuildID)
+	userID := i.Member.User.ID
+
+	gs.Lock()
+	gs.CommissionsRuntime.CommissionCounter++
+	num := gs.CommissionsRuntime.CommissionCounter
+	gs.Unlock()
+
+	channelName := fmt.Sprintf("commission-%04d", num)
+	discordCat := config.EffectiveCommissionCategory(cfg, gs)
+	staffRoles := config.EffectiveCommissionStaffRoles(cfg, gs)
+
+	overwrites := []*discordgo.PermissionOverwrite{
+		{ID: i.GuildID, Type: discordgo.PermissionOverwriteTypeRole, Deny: discordgo.PermissionViewChannel},
+		{
+			ID:    userID,
+			Type:  discordgo.PermissionOverwriteTypeMember,
+			Allow: discordgo.PermissionViewChannel | discordgo.PermissionSendMessages | discordgo.PermissionAttachFiles | discordgo.PermissionReadMessageHistory,
+		},
+	}
+
+	ch, err := s.GuildChannelCreateComplex(i.GuildID, discordgo.GuildChannelCreateData{
+		Name:                 channelName,
+		Type:                 discordgo.ChannelTypeGuildText,
+		ParentID:             discordCat,
+		PermissionOverwrites: overwrites,
+	})
+	if err != nil {
+		_ = s.InteractionRespond(i.Interaction, &discordgo.InteractionResponse{
+			Type: discordgo.InteractionResponseChannelMessageWithSource,
+			Data: &discordgo.InteractionResponseData{
+				Content: fmt.Sprintf("❌ Failed to create commission channel: %s", err.Error()),
+				Flags:   discordgo.MessageFlagsEphemeral,
+			},
+		})
+		return
+	}
+
+	ct := config.CommissionTicket{
+		ChannelID:            ch.ID,
+		UserID:               userID,
+		ServiceID:            serviceID,
+		ServiceName:          serviceName,
+		Details:              details,
+		Budget:               budget,
+		Timeline:             timeline,
+		Notes:                notes,
+		Number:               num,
+		CreatedAt:            time.Now().Format(time.RFC3339),
+		ClientThreadMessages: make(map[string]string),
+		Quotes:               make(map[string]config.CommissionQuote),
+	}
+
+	gs.Lock()
+	gs.CommissionsRuntime.OpenCommissions[ch.ID] = ct
+	gs.Unlock()
+	_ = gs.Save()
+
+	serviceDisplay := serviceName
+	if serviceEmoji != "" {
+		serviceDisplay = serviceEmoji + " " + serviceName
+	}
+
+	notesField := "*None provided*"
+	if notes != "" {
+		notesField = notes
+	}
+
+	embed := &discordgo.MessageEmbed{
+		Title: fmt.Sprintf("📋 Commission #%04d", num),
+		Color: 0x5865F2,
+		Fields: []*discordgo.MessageEmbedField{
+			{Name: "Client", Value: fmt.Sprintf("<@%s>", userID), Inline: true},
+			{Name: "Service", Value: serviceDisplay, Inline: true},
+			{Name: "Budget", Value: budget, Inline: true},
+			{Name: "Timeline", Value: timeline, Inline: true},
+			{Name: "Order Details", Value: details, Inline: false},
+			{Name: "Additional Notes", Value: notesField, Inline: false},
+		},
+		Footer:    &discordgo.MessageEmbedFooter{Text: fmt.Sprintf("Commission opened • %s", time.Now().Format("Jan 2, 2006 15:04"))},
+		Timestamp: time.Now().Format(time.RFC3339),
+	}
+
+	pingContent := fmt.Sprintf("<@%s>", userID)
+	for _, roleID := range staffRoles {
+		pingContent += fmt.Sprintf(" <@&%s>", roleID)
+	}
+
+	detailsMsg, err := s.ChannelMessageSendComplex(ch.ID, &discordgo.MessageSend{
+		Content: pingContent,
+		Embeds:  []*discordgo.MessageEmbed{embed},
+		Components: []discordgo.MessageComponent{
+			discordgo.ActionsRow{
+				Components: []discordgo.MessageComponent{
+					discordgo.Button{
+						Label:    "Issue Invoice",
