@@ -292,3 +292,101 @@ func createCommissionChannel(
 				Components: []discordgo.MessageComponent{
 					discordgo.Button{
 						Label:    "Issue Invoice",
+						Style:    discordgo.SuccessButton,
+						CustomID: "commission_invoice_btn:" + ch.ID,
+						Emoji:    &discordgo.ComponentEmoji{Name: "🧾"},
+					},
+					discordgo.Button{
+						Label:    "Close Commission",
+						Style:    discordgo.DangerButton,
+						CustomID: "commission_close_btn",
+						Emoji:    &discordgo.ComponentEmoji{Name: "🔒"},
+					},
+				},
+			},
+		},
+	})
+	if err != nil {
+		slog.Error("commission failed to send details message", "channel_id", ch.ID, "error", err)
+	} else {
+		if pinErr := s.ChannelMessagePin(ch.ID, detailsMsg.ID); pinErr != nil {
+			slog.Error("commission failed to pin message", "channel_id", ch.ID, "error", pinErr)
+		}
+	}
+
+	logCh := config.EffectiveCommissionLogChannel(cfg, gs)
+	if logCh != "" {
+		logEmbed := &discordgo.MessageEmbed{
+			Title: fmt.Sprintf("New Commission for %s", serviceDisplay),
+			Color: 0x57F287,
+			Fields: []*discordgo.MessageEmbedField{
+				{Name: "Client", Value: fmt.Sprintf("<@%s>", userID), Inline: true},
+				{Name: "Service", Value: serviceDisplay, Inline: true},
+				{Name: "Access", Value: "No freelancer selected yet", Inline: true},
+				{Name: "Budget", Value: safeEmbedValue(budget), Inline: true},
+				{Name: "Timeframe", Value: safeEmbedValue(timeline), Inline: true},
+				{Name: "Project Description", Value: safeEmbedValue(details), Inline: false},
+				{Name: "Additional Notes", Value: safeEmbedValue(notesField), Inline: false},
+			},
+			Timestamp: time.Now().Format(time.RFC3339),
+		}
+		logPing := ""
+		for _, roleID := range staffRoles {
+			logPing += fmt.Sprintf("<@&%s> ", roleID)
+		}
+		logMsg, err := s.ChannelMessageSendComplex(logCh, &discordgo.MessageSend{
+			Content:    strings.TrimSpace(logPing),
+			Embeds:     []*discordgo.MessageEmbed{logEmbed},
+			Components: commissionLogComponents(i.GuildID, ch.ID, "", true, false),
+		})
+		if err != nil {
+			slog.Error("commission failed to post log message", "channel_id", ch.ID, "error", err)
+		} else {
+			ct.LogChannelID = logCh
+			ct.LogMessageID = logMsg.ID
+			thread, threadErr := s.MessageThreadStartComplex(logCh, logMsg.ID, &discordgo.ThreadStart{
+				Name:                fmt.Sprintf("commission-%04d-discussion", num),
+				AutoArchiveDuration: 10080,
+			})
+			if threadErr != nil {
+				slog.Error("commission failed to create discussion thread", "channel_id", ch.ID, "error", threadErr)
+			} else {
+				ct.DiscussionThreadID = thread.ID
+				_, _ = s.ChannelMessageSend(thread.ID, formatCommissionInitialThreadMessage(&ct))
+				components := commissionLogComponents(i.GuildID, ch.ID, thread.ID, true, false)
+				_, _ = s.ChannelMessageEditComplex(&discordgo.MessageEdit{ID: logMsg.ID, Channel: logCh, Components: &components})
+			}
+			gs.Lock()
+			gs.CommissionsRuntime.OpenCommissions[ch.ID] = ct
+			gs.Unlock()
+			_ = gs.Save()
+		}
+	}
+
+	_ = s.InteractionRespond(i.Interaction, &discordgo.InteractionResponse{
+		Type: discordgo.InteractionResponseChannelMessageWithSource,
+		Data: &discordgo.InteractionResponseData{
+			Content: fmt.Sprintf("✅ Your commission ticket has been opened: <#%s>\n\nOur team will review your order and get back to you shortly!", ch.ID),
+			Flags:   discordgo.MessageFlagsEphemeral,
+		},
+	})
+}
+
+func handleCommissionCloseButton(s *discordgo.Session, i *discordgo.InteractionCreate) {
+	gs := storage.GetGuild(i.GuildID)
+	gs.Lock()
+	_, ok := gs.CommissionsRuntime.OpenCommissions[i.ChannelID]
+	gs.Unlock()
+	if !ok {
+		respond(s, i, "❌ This is not an active commission channel.", true)
+		return
+	}
+
+	_ = s.InteractionRespond(i.Interaction, &discordgo.InteractionResponse{
+		Type: discordgo.InteractionResponseChannelMessageWithSource,
+		Data: &discordgo.InteractionResponseData{
+			Content: "Are you sure you want to close this commission? The channel will be deleted.",
+			Flags:   discordgo.MessageFlagsEphemeral,
+			Components: []discordgo.MessageComponent{
+				discordgo.ActionsRow{
+					Components: []discordgo.MessageComponent{
