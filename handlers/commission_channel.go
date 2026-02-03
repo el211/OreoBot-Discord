@@ -390,3 +390,79 @@ func handleCommissionCloseButton(s *discordgo.Session, i *discordgo.InteractionC
 			Components: []discordgo.MessageComponent{
 				discordgo.ActionsRow{
 					Components: []discordgo.MessageComponent{
+						discordgo.Button{Label: "Yes, close it", Style: discordgo.DangerButton, CustomID: "commission_close_confirm"},
+						discordgo.Button{Label: "Cancel", Style: discordgo.SecondaryButton, CustomID: "commission_close_cancel"},
+					},
+				},
+			},
+		},
+	})
+}
+
+func handleCommissionCloseConfirm(s *discordgo.Session, i *discordgo.InteractionCreate) {
+	gs := storage.GetGuild(i.GuildID)
+	gs.Lock()
+	ct, ok := gs.CommissionsRuntime.OpenCommissions[i.ChannelID]
+	gs.Unlock()
+	if !ok {
+		respond(s, i, "❌ Commission not found.", true)
+		return
+	}
+
+	_ = s.InteractionRespond(i.Interaction, &discordgo.InteractionResponse{
+		Type: discordgo.InteractionResponseChannelMessageWithSource,
+		Data: &discordgo.InteractionResponseData{Content: "🔒 Closing commission..."},
+	})
+
+	go closeCommissionChannel(s, i.GuildID, i.ChannelID, i.Member.User, &ct, gs)
+}
+
+func handleCommissionCloseCancel(s *discordgo.Session, i *discordgo.InteractionCreate) {
+	_ = s.InteractionRespond(i.Interaction, &discordgo.InteractionResponse{
+		Type: discordgo.InteractionResponseUpdateMessage,
+		Data: &discordgo.InteractionResponseData{
+			Content:    "Cancelled. Commission is still open.",
+			Components: []discordgo.MessageComponent{},
+		},
+	})
+}
+
+func closeCommissionChannel(s *discordgo.Session, guildID, channelID string, closedBy *discordgo.User, ct *config.CommissionTicket, gs *config.GuildState) {
+	cfg := storage.Cfg
+	transcript := generateTranscript(s, channelID)
+
+	logCh := config.EffectiveCommissionLogChannel(cfg, gs)
+	if logCh != "" {
+		embed := &discordgo.MessageEmbed{
+			Title: fmt.Sprintf("Commission #%04d Closed", ct.Number),
+			Color: 0xED4245,
+			Fields: []*discordgo.MessageEmbedField{
+				{Name: "Client", Value: fmt.Sprintf("<@%s>", ct.UserID), Inline: true},
+				{Name: "Closed By", Value: fmt.Sprintf("<@%s>", closedBy.ID), Inline: true},
+				{Name: "Service", Value: ct.ServiceName, Inline: true},
+				{Name: "Budget", Value: ct.Budget, Inline: true},
+				{Name: "Timeline", Value: ct.Timeline, Inline: true},
+				{Name: "Opened At", Value: ct.CreatedAt, Inline: true},
+			},
+			Timestamp: time.Now().Format(time.RFC3339),
+		}
+		_, _ = s.ChannelMessageSendComplex(logCh, &discordgo.MessageSend{
+			Embeds: []*discordgo.MessageEmbed{embed},
+			Files: []*discordgo.File{
+				{
+					Name:        fmt.Sprintf("commission-%04d-transcript.txt", ct.Number),
+					ContentType: "text/plain",
+					Reader:      strings.NewReader(transcript),
+				},
+			},
+		})
+	}
+
+	gs.Lock()
+	delete(gs.CommissionsRuntime.OpenCommissions, channelID)
+	gs.Unlock()
+	_ = gs.Save()
+
+	time.Sleep(3 * time.Second)
+	_, _ = s.ChannelDelete(channelID)
+}
