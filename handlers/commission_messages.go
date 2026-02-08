@@ -96,3 +96,49 @@ func handleCommissionThreadReply(s *discordgo.Session, ct *config.CommissionTick
 func commissionThreadReferenceTargetsClient(s *discordgo.Session, ct *config.CommissionTicket, threadID, referencedID string) bool {
 	if referencedID == ct.LogMessageID {
 		return true
+	}
+	for _, threadMsgID := range ct.ClientThreadMessages {
+		if threadMsgID == referencedID {
+			return true
+		}
+	}
+	ref, err := s.ChannelMessage(threadID, referencedID)
+	if err != nil || ref == nil || ref.Author == nil {
+		return false
+	}
+	if s.State != nil && s.State.User != nil && ref.Author.ID == s.State.User.ID {
+		content := strings.TrimSpace(ref.Content)
+		return strings.HasPrefix(content, "Client ") || strings.HasPrefix(content, "Commission brief") || strings.Contains(content, "Project Description")
+	}
+	return false
+}
+
+func formatCommissionClientMirror(m *discordgo.MessageCreate) string {
+	body := strings.TrimSpace(m.Content)
+	if body == "" {
+		body = "*(no text content)*"
+	}
+	if len(m.Attachments) > 0 {
+		var urls []string
+		for _, a := range m.Attachments {
+			urls = append(urls, a.URL)
+		}
+		body += "\n\nAttachments:\n" + strings.Join(urls, "\n")
+	}
+	return truncateMessage(fmt.Sprintf("Client <@%s> wrote:\n%s", m.Author.ID, body), 1900)
+}
+
+func formatCommissionFreelancerReply(m *discordgo.MessageCreate) string {
+	body := strings.TrimSpace(m.Content)
+	if body == "" {
+		body = "*(no text content)*"
+	}
+	if len(m.Attachments) > 0 {
+		var urls []string
+		for _, a := range m.Attachments {
+			urls = append(urls, a.URL)
+		}
+		body += "\n\nAttachments:\n" + strings.Join(urls, "\n")
+	}
+	return truncateMessage(fmt.Sprintf("Freelancer %s: %s", m.Author.Username, body), 1900)
+}
