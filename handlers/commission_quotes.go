@@ -96,3 +96,101 @@ func handleCommissionQuoteModalSubmit(s *discordgo.Session, i *discordgo.Interac
 		Content: fmt.Sprintf("<@%s>", ct.UserID),
 		Embeds:  []*discordgo.MessageEmbed{embed},
 		Components: []discordgo.MessageComponent{discordgo.ActionsRow{Components: []discordgo.MessageComponent{
+			discordgo.Button{Label: "Accept Quote", Style: discordgo.SuccessButton, CustomID: "commission_quote_accept:" + channelID + ":" + quoteID},
+			discordgo.Button{Label: "Decline Quote", Style: discordgo.DangerButton, CustomID: "commission_quote_decline:" + channelID + ":" + quoteID},
+		}}},
+	})
+	if sendErr != nil {
+		respond(s, i, fmt.Sprintf("Quote saved, but failed to post in ticket: `%s`", sendErr.Error()), true)
+		return
+	}
+	respond(s, i, fmt.Sprintf("Quote sent to <@%s> in <#%s>.", ct.UserID, channelID), true)
+}
+
+func handleCommissionQuoteAccept(s *discordgo.Session, i *discordgo.InteractionCreate) {
+	channelID, quoteID, ok := parseCommissionQuoteComponent(i.MessageComponentData().CustomID, "commission_quote_accept:")
+	if !ok {
+		respond(s, i, "Invalid quote action.", true)
+		return
+	}
+
+	gs := storage.GetGuild(i.GuildID)
+	gs.Lock()
+	ct, exists := gs.CommissionsRuntime.OpenCommissions[channelID]
+	var quote config.CommissionQuote
+	quoteExists := false
+	if exists {
+		ensureCommissionTicketRuntime(&ct)
+		quote, quoteExists = ct.Quotes[quoteID]
+	}
+	if exists && quoteExists && i.Member.User.ID == ct.UserID {
+		for id, existing := range ct.Quotes {
+			if existing.Status == "accepted" {
+				existing.Status = "superseded"
+				ct.Quotes[id] = existing
+			}
+		}
+		quote.Status = "accepted"
+		ct.Quotes[quoteID] = quote
+		ct.AcceptedFreelancerID = quote.FreelancerID
+		gs.CommissionsRuntime.OpenCommissions[channelID] = ct
+	}
+	gs.Unlock()
+
+	if !exists {
+		respond(s, i, "Could not find this commission ticket.", true)
+		return
+	}
+	if i.Member.User.ID != ct.UserID {
+		respond(s, i, "Only the client can accept this quote.", true)
+		return
+	}
+	if !quoteExists {
+		respond(s, i, "Could not find that quote.", true)
+		return
+	}
+
+	allow := int64(discordgo.PermissionViewChannel | discordgo.PermissionSendMessages | discordgo.PermissionAttachFiles | discordgo.PermissionReadMessageHistory)
+	if err := s.ChannelPermissionSet(channelID, quote.FreelancerID, discordgo.PermissionOverwriteTypeMember, allow, 0); err != nil {
+		respond(s, i, fmt.Sprintf("Quote accepted, but I could not open the ticket for the freelancer: `%s`", err.Error()), true)
+		return
+	}
+
+	_ = gs.Save()
+	_, _ = s.ChannelMessageSend(channelID, fmt.Sprintf("Quote accepted by <@%s>. <@%s> now has access to this ticket.", ct.UserID, quote.FreelancerID))
+	if ct.DiscussionThreadID != "" {
+		_, _ = s.ChannelMessageSend(ct.DiscussionThreadID, fmt.Sprintf("Quote `%s` was accepted by <@%s>. <@%s> now has access to <#%s>.", quoteID, ct.UserID, quote.FreelancerID, channelID))
+	}
+
+	if ct.LogMessageID != "" && ct.LogChannelID != "" {
+		components := commissionLogComponents(i.GuildID, channelID, ct.DiscussionThreadID, false, true)
+		if components != nil {
+			_, _ = s.ChannelMessageEditComplex(&discordgo.MessageEdit{
+				ID:         ct.LogMessageID,
+				Channel:    ct.LogChannelID,
+				Components: &components,
+			})
+		}
+	}
+
+	sendCommissionAcceptedDM(s, quote.FreelancerID, &ct, &quote)
+	respond(s, i, "Quote accepted. The freelancer can now access this ticket.", true)
+}
+
+func handleCommissionQuoteDecline(s *discordgo.Session, i *discordgo.InteractionCreate) {
+	channelID, quoteID, ok := parseCommissionQuoteComponent(i.MessageComponentData().CustomID, "commission_quote_decline:")
+	if !ok {
+		respond(s, i, "Invalid quote action.", true)
+		return
+	}
+	gs := storage.GetGuild(i.GuildID)
+	gs.Lock()
+	ct, exists := gs.CommissionsRuntime.OpenCommissions[channelID]
+	gs.Unlock()
+	if !exists {
+		respond(s, i, "Could not find this commission ticket.", true)
+		return
+	}
+	if i.Member.User.ID != ct.UserID {
+		respond(s, i, "Only the client can decline this quote.", true)
+		return
