@@ -96,3 +96,101 @@ var stripeCurrencies = [][2]string{
 	{"VUV", "VUV — Vanuatu Vatu"},
 	{"XPF", "XPF — CFP Franc"},
 	{"XOF", "XOF — West African CFA Franc"},
+	{"XAF", "XAF — Central African CFA Franc"},
+	{"GNF", "GNF — Guinean Franc"},
+	{"MGA", "MGA — Malagasy Ariary"},
+	{"MZN", "MZN — Mozambican Metical"},
+	{"ZMW", "ZMW — Zambian Kwacha"},
+	{"MWK", "MWK — Malawian Kwacha"},
+	{"ETB", "ETB — Ethiopian Birr"},
+	{"RWF", "RWF — Rwandan Franc"},
+	{"BIF", "BIF — Burundian Franc"},
+	{"DJF", "DJF — Djiboutian Franc"},
+	{"KMF", "KMF — Comorian Franc"},
+	{"MRU", "MRU — Mauritanian Ouguiya"},
+	{"SCR", "SCR — Seychellois Rupee"},
+	{"MUR", "MUR — Mauritian Rupee"},
+	{"MVR", "MVR — Maldivian Rufiyaa"},
+	{"BTN", "BTN — Bhutanese Ngultrum"},
+	{"MMK", "MMK — Myanmar Kyat"},
+	{"KHR", "KHR — Cambodian Riel"},
+	{"LAK", "LAK — Lao Kip"},
+	{"MNT", "MNT — Mongolian Tugrik"},
+	{"AMD", "AMD — Armenian Dram"},
+	{"GEL", "GEL — Georgian Lari"},
+	{"AZN", "AZN — Azerbaijani Manat"},
+	{"KZT", "KZT — Kazakhstani Tenge"},
+	{"UZS", "UZS — Uzbekistani Som"},
+	{"TJS", "TJS — Tajikistani Somoni"},
+	{"KGS", "KGS — Kyrgyzstani Som"},
+	{"TMT", "TMT — Turkmenistani Manat"},
+	{"AFN", "AFN — Afghan Afghani"},
+	{"IRR", "IRR — Iranian Rial"},
+	{"IQD", "IQD — Iraqi Dinar"},
+	{"LBP", "LBP — Lebanese Pound"},
+	{"SYP", "SYP — Syrian Pound"},
+	{"JOD", "JOD — Jordanian Dinar"},
+	{"YER", "YER — Yemeni Rial"},
+	{"SDG", "SDG — Sudanese Pound"},
+	{"LYD", "LYD — Libyan Dinar"},
+	{"TND", "TND — Tunisian Dinar"},
+	{"DZD", "DZD — Algerian Dinar"},
+	{"MKD", "MKD — Macedonian Denar"},
+	{"ALL", "ALL — Albanian Lek"},
+	{"BAM", "BAM — Bosnia-Herzegovina Convertible Mark"},
+	{"RSD", "RSD — Serbian Dinar"},
+	{"MDL", "MDL — Moldovan Leu"},
+	{"UAH", "UAH — Ukrainian Hryvnia"},
+	{"BYN", "BYN — Belarusian Ruble"},
+	{"GBP", "GBP — British Pound"},
+}
+
+func handleInvoiceCurrencyAutocomplete(s *discordgo.Session, i *discordgo.InteractionCreate) {
+	// Find the focused currency option inside the "create" subcommand
+	var query string
+	for _, opt := range i.ApplicationCommandData().Options {
+		if opt.Name == "create" {
+			for _, sub := range opt.Options {
+				if sub.Name == "currency" && sub.Focused {
+					query = strings.ToUpper(strings.TrimSpace(sub.StringValue()))
+				}
+			}
+		}
+	}
+
+	def := defaultInvoiceCurrency()
+	choices := make([]*discordgo.ApplicationCommandOptionChoice, 0, 25)
+
+	// Always show the configured default first when the field is empty
+	if query == "" {
+		choices = append(choices, &discordgo.ApplicationCommandOptionChoice{
+			Name:  fmt.Sprintf("%s (your default)", def),
+			Value: def,
+		})
+	}
+
+	seen := map[string]bool{}
+	for _, pair := range stripeCurrencies {
+		code, label := pair[0], pair[1]
+		if seen[code] {
+			continue
+		}
+		if query != "" && !strings.HasPrefix(code, query) && !strings.Contains(strings.ToUpper(label), query) {
+			continue
+		}
+		if code == def && query == "" {
+			seen[code] = true
+			continue // already added as the default entry above
+		}
+		seen[code] = true
+		choices = append(choices, &discordgo.ApplicationCommandOptionChoice{
+			Name:  label,
+			Value: code,
+		})
+		if len(choices) >= 25 {
+			break
+		}
+	}
+
+	_ = s.InteractionRespond(i.Interaction, &discordgo.InteractionResponse{
+		Type: discordgo.InteractionApplicationCommandAutocompleteResult,
