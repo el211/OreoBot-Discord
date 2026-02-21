@@ -194,3 +194,101 @@ func handleInvoiceCurrencyAutocomplete(s *discordgo.Session, i *discordgo.Intera
 
 	_ = s.InteractionRespond(i.Interaction, &discordgo.InteractionResponse{
 		Type: discordgo.InteractionApplicationCommandAutocompleteResult,
+		Data: &discordgo.InteractionResponseData{Choices: choices},
+	})
+}
+
+func handleInvoiceCreate(s *discordgo.Session, i *discordgo.InteractionCreate, opts []*discordgo.ApplicationCommandInteractionDataOption) {
+	om := subOptMap(opts)
+	cfg := storage.Cfg
+	gs := storage.GetGuild(i.GuildID)
+
+	client := om["client"].UserValue(s)
+	amount := om["amount"].FloatValue()
+	description := om["description"].StringValue()
+	currency := strings.ToUpper(optStr(om, "currency", defaultInvoiceCurrency()))
+	note := optStr(om, "note", "")
+
+	hasGateway := payments.Svc != nil
+	paypalEmail := config.EffectiveCommissionPayPalEmail(cfg, gs)
+	paypalMe := config.EffectiveCommissionPayPalMe(cfg, gs)
+	if !hasGateway && paypalEmail == "" && paypalMe == "" {
+		respond(s, i, "❌ No payment method configured. Set up a gateway via `/commission setup` or the `payment` block in `config.json`.", true)
+		return
+	}
+
+	_ = s.InteractionRespond(i.Interaction, &discordgo.InteractionResponse{
+		Type: discordgo.InteractionResponseDeferredChannelMessageWithSource,
+		Data: &discordgo.InteractionResponseData{Flags: discordgo.MessageFlagsEphemeral},
+	})
+
+	gs.Lock()
+	gs.CommissionsRuntime.InvoiceCounter++
+	invNum := gs.CommissionsRuntime.InvoiceCounter
+	gs.Unlock()
+
+	inv := config.CommissionInvoice{
+		Number:      invNum,
+		ChannelID:   i.ChannelID,
+		GuildID:     i.GuildID,
+		ClientID:    client.ID,
+		CreatedBy:   i.Member.User.ID,
+		Amount:      amount,
+		Currency:    currency,
+		Description: description,
+		Note:        note,
+		CreatedAt:   time.Now().Format(time.RFC3339),
+	}
+
+	gatewayButtons, gatewayErrs := buildInvoiceButtons(&inv, paypalMe, amount, currency)
+
+	gs.Lock()
+	gs.CommissionsRuntime.Invoices = append(gs.CommissionsRuntime.Invoices, inv)
+	gs.Unlock()
+	_ = gs.Save()
+
+	fields := []*discordgo.MessageEmbedField{
+		{Name: "Invoice #", Value: fmt.Sprintf("`INV-%04d`", invNum), Inline: true},
+		{Name: "Client", Value: fmt.Sprintf("<@%s>", client.ID), Inline: true},
+		{Name: "Amount", Value: fmt.Sprintf("**%.2f %s**", amount, currency), Inline: true},
+		{Name: "Service", Value: description, Inline: false},
+	}
+	if len(gatewayButtons) == 0 && paypalEmail != "" {
+		fields = append(fields, &discordgo.MessageEmbedField{
+			Name: "Pay To (PayPal)", Value: fmt.Sprintf("`%s`", paypalEmail), Inline: true,
+		})
+	}
+	if note != "" {
+		fields = append(fields, &discordgo.MessageEmbedField{Name: "Note", Value: note, Inline: false})
+	}
+
+	embed := &discordgo.MessageEmbed{
+		Title:       fmt.Sprintf("🧾 Invoice #INV-%04d", invNum),
+		Description: fmt.Sprintf("<@%s> — please review and complete payment below.", client.ID),
+		Color:       0xF0A500,
+		Fields:      fields,
+		Footer:      &discordgo.MessageEmbedFooter{Text: fmt.Sprintf("Created by %s • %s", i.Member.User.Username, time.Now().Format("Jan 2, 2006"))},
+		Timestamp:   time.Now().Format(time.RFC3339),
+	}
+
+	send := buildInvoiceSend(fmt.Sprintf("<@%s>", client.ID), embed, gatewayButtons)
+	if _, err := s.ChannelMessageSendComplex(i.ChannelID, send); err != nil {
+		_, _ = s.FollowupMessageCreate(i.Interaction, true, &discordgo.WebhookParams{
+			Content: fmt.Sprintf("❌ Failed to post invoice: %s", err.Error()),
+			Flags:   discordgo.MessageFlagsEphemeral,
+		})
+		return
+	}
+
+	confirmMsg := fmt.Sprintf("✅ Invoice `INV-%04d` posted for <@%s> — **%.2f %s**.", invNum, client.ID, amount, currency)
+	if len(gatewayErrs) > 0 {
+		var errLines []string
+		for _, e := range gatewayErrs {
+			errLines = append(errLines, "• "+e.Error())
+		}
+		confirmMsg += "\n\n⚠️ Some payment gateways failed:\n" + strings.Join(errLines, "\n")
+		if len(gatewayButtons) > 0 {
+			confirmMsg += "\nThe invoice was posted with the remaining available payment method(s)."
+		} else if paypalEmail != "" {
+			confirmMsg += "\nThe invoice was posted with the PayPal email as fallback — no payment button is available."
+		} else {
