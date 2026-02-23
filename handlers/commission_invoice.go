@@ -292,3 +292,101 @@ func handleInvoiceCreate(s *discordgo.Session, i *discordgo.InteractionCreate, o
 		} else if paypalEmail != "" {
 			confirmMsg += "\nThe invoice was posted with the PayPal email as fallback — no payment button is available."
 		} else {
+			confirmMsg += "\nNo payment methods are available on this invoice."
+		}
+	}
+	_, _ = s.FollowupMessageCreate(i.Interaction, true, &discordgo.WebhookParams{
+		Content: confirmMsg,
+		Flags:   discordgo.MessageFlagsEphemeral,
+	})
+}
+
+func handleInvoiceList(s *discordgo.Session, i *discordgo.InteractionCreate) {
+	gs := storage.GetGuild(i.GuildID)
+	gs.Lock()
+	invs := gs.CommissionsRuntime.Invoices
+	gs.Unlock()
+
+	if len(invs) == 0 {
+		respond(s, i, "📭 No invoices on record.", true)
+		return
+	}
+
+	var sb strings.Builder
+	sb.WriteString(fmt.Sprintf("**Invoices** (%d total):\n\n", len(invs)))
+	for _, inv := range invs {
+		paid := "unpaid"
+		if inv.Paid {
+			paid = "✅ paid"
+		}
+		sb.WriteString(fmt.Sprintf("`INV-%04d` — <@%s> — **%.2f %s** — %s\n", inv.Number, inv.ClientID, inv.Amount, inv.Currency, paid))
+	}
+	respond(s, i, sb.String(), true)
+}
+
+func handleCommissionInvoiceButton(s *discordgo.Session, i *discordgo.InteractionCreate) {
+	channelID := strings.TrimPrefix(i.MessageComponentData().CustomID, "commission_invoice_btn:")
+
+	gs := storage.GetGuild(i.GuildID)
+	gs.Lock()
+	ct, ok := gs.CommissionsRuntime.OpenCommissions[channelID]
+	gs.Unlock()
+	if !ok {
+		respond(s, i, "❌ Could not find the commission data for this channel.", true)
+		return
+	}
+
+	descDefault := fmt.Sprintf("%s — %s", ct.ServiceName, ct.Details)
+	if len(descDefault) > 100 {
+		descDefault = descDefault[:100]
+	}
+
+	_ = s.InteractionRespond(i.Interaction, &discordgo.InteractionResponse{
+		Type: discordgo.InteractionResponseModal,
+		Data: &discordgo.InteractionResponseData{
+			CustomID: "commission_invoice_modal:" + channelID,
+			Title:    fmt.Sprintf("Issue Invoice — Commission #%04d", ct.Number),
+			Components: []discordgo.MessageComponent{
+				discordgo.ActionsRow{Components: []discordgo.MessageComponent{
+					discordgo.TextInput{
+						CustomID:    "amount",
+						Label:       "Amount to charge",
+						Style:       discordgo.TextInputShort,
+						Required:    true,
+						Placeholder: "e.g. 50.00",
+						MaxLength:   20,
+					},
+				}},
+				discordgo.ActionsRow{Components: []discordgo.MessageComponent{
+					discordgo.TextInput{
+						CustomID:    "currency",
+						Label:       fmt.Sprintf("Currency (default: %s)", defaultInvoiceCurrency()),
+						Style:       discordgo.TextInputShort,
+						Required:    false,
+						Placeholder: defaultInvoiceCurrency(),
+						MaxLength:   5,
+					},
+				}},
+				discordgo.ActionsRow{Components: []discordgo.MessageComponent{
+					discordgo.TextInput{
+						CustomID:  "description",
+						Label:     "Invoice description (pre-filled)",
+						Style:     discordgo.TextInputParagraph,
+						Required:  true,
+						Value:     descDefault,
+						MaxLength: 500,
+					},
+				}},
+				discordgo.ActionsRow{Components: []discordgo.MessageComponent{
+					discordgo.TextInput{
+						CustomID:    "note",
+						Label:       "Additional note (optional)",
+						Style:       discordgo.TextInputShort,
+						Required:    false,
+						Placeholder: "e.g. Due in 7 days",
+						MaxLength:   200,
+					},
+				}},
+			},
+		},
+	})
