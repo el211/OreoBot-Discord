@@ -390,3 +390,100 @@ func handleCommissionInvoiceButton(s *discordgo.Session, i *discordgo.Interactio
 			},
 		},
 	})
+}
+
+func handleCommissionInvoiceModalSubmit(s *discordgo.Session, i *discordgo.InteractionCreate) {
+	data := i.ModalSubmitData()
+	channelID := strings.TrimPrefix(data.CustomID, "commission_invoice_modal:")
+
+	gs := storage.GetGuild(i.GuildID)
+	gs.Lock()
+	ct, ok := gs.CommissionsRuntime.OpenCommissions[channelID]
+	gs.Unlock()
+	if !ok {
+		respond(s, i, "❌ Could not find the commission data. The ticket may have been closed.", true)
+		return
+	}
+
+	modalFields := modalTextValues(data.Components)
+	amountStr := strings.TrimSpace(modalFields["amount"])
+	currency := strings.TrimSpace(modalFields["currency"])
+	description := strings.TrimSpace(modalFields["description"])
+	note := strings.TrimSpace(modalFields["note"])
+
+	amountStr = strings.ReplaceAll(amountStr, ",", ".")
+	amount, parseErr := strconv.ParseFloat(amountStr, 64)
+	if parseErr != nil || amount <= 0 {
+		respond(s, i, "❌ Invalid amount. Please enter a number like `50.00` or `50,00`.", true)
+		return
+	}
+	if currency == "" {
+		currency = defaultInvoiceCurrency()
+	}
+	currency = strings.ToUpper(currency)
+	if description == "" {
+		description = ct.ServiceName
+	}
+
+	cfg := storage.Cfg
+	paypalEmail := config.EffectiveCommissionPayPalEmail(cfg, gs)
+	paypalMe := config.EffectiveCommissionPayPalMe(cfg, gs)
+	if payments.Svc == nil && paypalEmail == "" && paypalMe == "" {
+		respond(s, i, "❌ No payment method configured.", true)
+		return
+	}
+
+	_ = s.InteractionRespond(i.Interaction, &discordgo.InteractionResponse{
+		Type: discordgo.InteractionResponseDeferredChannelMessageWithSource,
+		Data: &discordgo.InteractionResponseData{Flags: discordgo.MessageFlagsEphemeral},
+	})
+
+	gs.Lock()
+	gs.CommissionsRuntime.InvoiceCounter++
+	invNum := gs.CommissionsRuntime.InvoiceCounter
+	gs.Unlock()
+
+	inv := config.CommissionInvoice{
+		Number:      invNum,
+		ChannelID:   channelID,
+		GuildID:     i.GuildID,
+		ClientID:    ct.UserID,
+		CreatedBy:   i.Member.User.ID,
+		Amount:      amount,
+		Currency:    currency,
+		Description: description,
+		Note:        note,
+		CreatedAt:   time.Now().Format(time.RFC3339),
+	}
+
+	gatewayButtons, gatewayErrs := buildInvoiceButtons(&inv, paypalMe, amount, currency)
+
+	gs.Lock()
+	gs.CommissionsRuntime.Invoices = append(gs.CommissionsRuntime.Invoices, inv)
+	gs.Unlock()
+	_ = gs.Save()
+
+	fields := []*discordgo.MessageEmbedField{
+		{Name: "Invoice #", Value: fmt.Sprintf("`INV-%04d`", invNum), Inline: true},
+		{Name: "Client", Value: fmt.Sprintf("<@%s>", ct.UserID), Inline: true},
+		{Name: "Amount", Value: fmt.Sprintf("**%.2f %s**", amount, currency), Inline: true},
+		{Name: "Service", Value: ct.ServiceName, Inline: true},
+		{Name: "Description", Value: description, Inline: false},
+	}
+	if len(gatewayButtons) == 0 && paypalEmail != "" {
+		fields = append(fields, &discordgo.MessageEmbedField{
+			Name: "Pay To (PayPal)", Value: fmt.Sprintf("`%s`", paypalEmail), Inline: true,
+		})
+	}
+	if note != "" {
+		fields = append(fields, &discordgo.MessageEmbedField{Name: "Note", Value: note, Inline: false})
+	}
+
+	embed := &discordgo.MessageEmbed{
+		Title:       fmt.Sprintf("🧾 Invoice #INV-%04d", invNum),
+		Description: fmt.Sprintf("<@%s> — please review your order and complete payment below.", ct.UserID),
+		Color:       0xF0A500,
+		Fields:      fields,
+		Footer:      &discordgo.MessageEmbedFooter{Text: fmt.Sprintf("Issued by %s • %s", i.Member.User.Username, time.Now().Format("Jan 2, 2006"))},
+		Timestamp:   time.Now().Format(time.RFC3339),
+	}
