@@ -487,3 +487,80 @@ func handleCommissionInvoiceModalSubmit(s *discordgo.Session, i *discordgo.Inter
 		Footer:      &discordgo.MessageEmbedFooter{Text: fmt.Sprintf("Issued by %s • %s", i.Member.User.Username, time.Now().Format("Jan 2, 2006"))},
 		Timestamp:   time.Now().Format(time.RFC3339),
 	}
+
+	send := buildInvoiceSend(fmt.Sprintf("<@%s>", ct.UserID), embed, gatewayButtons)
+	if _, err := s.ChannelMessageSendComplex(channelID, send); err != nil {
+		_, _ = s.FollowupMessageCreate(i.Interaction, true, &discordgo.WebhookParams{
+			Content: fmt.Sprintf("❌ Failed to post invoice: %s", err.Error()),
+			Flags:   discordgo.MessageFlagsEphemeral,
+		})
+		return
+	}
+
+	confirmMsg := fmt.Sprintf("✅ Invoice `INV-%04d` posted — **%.2f %s** for <@%s>.", invNum, amount, currency, ct.UserID)
+	if len(gatewayErrs) > 0 {
+		var errLines []string
+		for _, e := range gatewayErrs {
+			errLines = append(errLines, "• "+e.Error())
+		}
+		confirmMsg += "\n\n⚠️ Some payment gateways failed:\n" + strings.Join(errLines, "\n")
+		if len(gatewayButtons) > 0 {
+			confirmMsg += "\nThe invoice was posted with the remaining available payment method(s)."
+		} else if paypalEmail != "" {
+			confirmMsg += "\nThe invoice was posted with the PayPal email as fallback — no payment button is available."
+		} else {
+			confirmMsg += "\nNo payment methods are available on this invoice."
+		}
+	}
+	_, _ = s.FollowupMessageCreate(i.Interaction, true, &discordgo.WebhookParams{
+		Content: confirmMsg,
+		Flags:   discordgo.MessageFlagsEphemeral,
+	})
+}
+
+// buildInvoiceButtons assembles payment link buttons from the gateway and/or PayPal.me fallback.
+// It returns the buttons and any gateway errors so callers can surface failures to staff.
+func buildInvoiceButtons(inv *config.CommissionInvoice, paypalMe string, amount float64, currency string) ([]discordgo.MessageComponent, []error) {
+	var buttons []discordgo.MessageComponent
+	var gatewayErrs []error
+	if payments.Svc != nil {
+		links, errs := payments.Svc.CreateLinks(inv)
+		gatewayErrs = errs
+		for _, btn := range links {
+			buttons = append(buttons, discordgo.Button{
+				Label: btn.Label,
+				Style: discordgo.LinkButton,
+				URL:   btn.URL,
+				Emoji: &discordgo.ComponentEmoji{Name: btn.Emoji},
+			})
+		}
+	}
+	if len(buttons) == 0 && paypalMe != "" {
+		paypalURL := fmt.Sprintf("https://paypal.me/%s/%.2f%s", paypalMe, amount, currency)
+		buttons = append(buttons, discordgo.Button{
+			Label: fmt.Sprintf("Pay %.2f %s via PayPal", amount, currency),
+			Style: discordgo.LinkButton,
+			URL:   paypalURL,
+			Emoji: &discordgo.ComponentEmoji{Name: "💳"},
+		})
+	}
+	return buttons, gatewayErrs
+}
+
+// buildInvoiceSend creates the MessageSend with the embed and button rows (max 5 per row).
+func buildInvoiceSend(content string, embed *discordgo.MessageEmbed, buttons []discordgo.MessageComponent) *discordgo.MessageSend {
+	send := &discordgo.MessageSend{
+		Content: content,
+		Embeds:  []*discordgo.MessageEmbed{embed},
+	}
+	for start := 0; start < len(buttons); start += 5 {
+		end := start + 5
+		if end > len(buttons) {
+			end = len(buttons)
+		}
+		send.Components = append(send.Components, discordgo.ActionsRow{
+			Components: buttons[start:end],
+		})
+	}
+	return send
+}
