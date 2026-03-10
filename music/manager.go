@@ -96,3 +96,101 @@ func (m *Manager) GetPlayer(guildID string) *GuildPlayer {
 		p = &GuildPlayer{
 			GuildID: guildID,
 			Volume:  m.cfg.DefaultVolume,
+			backend: m.backend,
+			session: m.session,
+		}
+		m.players[guildID] = p
+	}
+	return p
+}
+
+func (m *Manager) BackendName() string {
+	return m.backend.Name()
+}
+
+func (m *Manager) ResolveSong(query string) (*Song, error) {
+	return m.backend.ResolveSong(query)
+}
+
+func (m *Manager) Cleanup() {
+	m.mu.Lock()
+	defer m.mu.Unlock()
+	for _, p := range m.players {
+		p.Stop()
+	}
+	m.backend.Cleanup()
+}
+
+func (p *GuildPlayer) Mu() *sync.Mutex {
+	return &p.mu
+}
+
+func (p *GuildPlayer) JoinChannel(guildID, channelID string) error {
+	p.mu.Lock()
+	defer p.mu.Unlock()
+
+	_, isLavalink := p.backend.(*LavalinkBackend)
+
+	if p.VoiceConn != nil {
+
+		if p.VoiceChannelID == channelID {
+			return nil
+		}
+		_ = p.VoiceConn.Disconnect(context.Background())
+	}
+
+	ClearVoiceInfo(guildID)
+
+	vc, err := p.session.ChannelVoiceJoin(context.Background(), guildID, channelID, false, false)
+	if err != nil {
+		return err
+	}
+	p.VoiceConn = vc
+	p.VoiceChannelID = channelID
+
+	if isLavalink {
+		lb := p.backend.(*LavalinkBackend)
+		lb.SetChannelID(channelID)
+		time.Sleep(500 * time.Millisecond)
+		vc.Kill()
+		slog.Info("closed discordgo voice WS for lavalink", "guild", guildID)
+	}
+
+	return nil
+}
+
+func (p *GuildPlayer) Enqueue(song *Song, maxQueueSize int) (position int, err error) {
+	p.mu.Lock()
+	defer p.mu.Unlock()
+
+	if len(p.Queue) >= maxQueueSize {
+		return 0, fmt.Errorf("queue is full (%d/%d)", len(p.Queue), maxQueueSize)
+	}
+	p.Queue = append(p.Queue, song)
+	return len(p.Queue), nil
+}
+
+func (p *GuildPlayer) PlayNext() {
+	p.mu.Lock()
+
+	if p.VoiceConn == nil {
+		p.Playing = false
+		p.mu.Unlock()
+		return
+	}
+
+	if len(p.Queue) == 0 {
+		p.NowPlaying = nil
+		p.Playing = false
+		p.mu.Unlock()
+
+		go func() {
+			time.Sleep(2 * time.Minute)
+			p.mu.Lock()
+			if !p.Playing && p.VoiceConn != nil {
+				_ = p.VoiceConn.Disconnect(context.Background())
+				p.VoiceConn = nil
+				p.VoiceChannelID = ""
+			}
+			p.mu.Unlock()
+		}()
