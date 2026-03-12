@@ -194,3 +194,86 @@ func (p *GuildPlayer) PlayNext() {
 			}
 			p.mu.Unlock()
 		}()
+		return
+	}
+
+	song := p.Queue[0]
+	p.Queue = p.Queue[1:]
+	p.NowPlaying = song
+	p.Playing = true
+	p.Paused = false
+
+	vc := p.VoiceConn
+	vol := p.Volume
+	p.stopCh = make(chan struct{})
+	p.mu.Unlock()
+
+	done := make(chan struct{})
+	go p.backend.Play(vc, song, vol, done)
+
+	go func() {
+		<-done
+		p.mu.Lock()
+
+		if p.NowPlaying == song {
+			p.mu.Unlock()
+			p.PlayNext()
+		} else {
+			p.mu.Unlock()
+		}
+	}()
+}
+
+func (p *GuildPlayer) Skip() *Song {
+	p.mu.Lock()
+	skipped := p.NowPlaying
+	p.mu.Unlock()
+
+	p.backend.Stop()
+
+	return skipped
+}
+
+func (p *GuildPlayer) Stop() {
+	p.mu.Lock()
+	p.Queue = nil
+	p.NowPlaying = nil
+	p.Playing = false
+	p.Paused = false
+	vc := p.VoiceConn
+	p.mu.Unlock()
+
+	p.backend.Stop()
+
+	if vc != nil {
+		_ = vc.Disconnect(context.Background())
+		p.mu.Lock()
+		p.VoiceConn = nil
+		p.VoiceChannelID = ""
+		p.mu.Unlock()
+		slog.Info("disconnected from voice", "guild", vc.GuildID)
+	}
+}
+
+func (p *GuildPlayer) SetVolume(vol int) {
+	p.mu.Lock()
+	p.Volume = vol
+	p.mu.Unlock()
+	p.backend.SetVolume(vol)
+}
+func (p *GuildPlayer) Backend() Backend {
+	return p.backend
+}
+
+func GetVoiceChannelOfUser(s *discordgo.Session, guildID, userID string) string {
+	guild, err := s.State.Guild(guildID)
+	if err != nil {
+		return ""
+	}
+	for _, vs := range guild.VoiceStates {
+		if vs.UserID == userID {
+			return vs.ChannelID
+		}
+	}
+	return ""
+}
