@@ -96,3 +96,101 @@ func (d *DirectBackend) ResolveSong(query string) (*Song, error) {
 		lastErr = err
 	}
 	return nil, lastErr
+}
+
+func (d *DirectBackend) resolveWithYTDLP(query string) (*Song, error) {
+
+	isSC := strings.HasPrefix(query, "scsearch") || strings.Contains(query, "soundcloud.com")
+
+	args := []string{
+		"--no-playlist",
+		"--dump-json",
+		"--no-warnings",
+		"--no-check-certificates",
+	}
+
+	if isSC {
+		args = append(args,
+			"-f", "http_mp3_128/http_mp3_64/bestaudio/best",
+		)
+	} else {
+		args = append(args,
+			"-f", "bestaudio/best",
+			"--format-sort", "proto:https,ext:m4a:mp3:opus:ogg,aext:m4a:mp3:opus:ogg,acodec:opus:aac",
+			"--extractor-args", "youtube:player_client=android",
+			"--extractor-args", "youtube:player_skip=webpage,configs,js",
+		)
+	}
+
+	args = append(args, query)
+
+	cmd := exec.Command(d.ytdlpPath, args...)
+
+	var stdout, stderr strings.Builder
+	cmd.Stdout = &stdout
+	cmd.Stderr = &stderr
+
+	if err := cmd.Run(); err != nil {
+		errMsg := strings.TrimSpace(stderr.String())
+		if errMsg == "" {
+			errMsg = err.Error()
+		}
+		return nil, fmt.Errorf("yt-dlp failed: %s", errMsg)
+	}
+
+	output := stdout.String()
+	if output == "" {
+		return nil, fmt.Errorf("yt-dlp returned empty output (stderr: %s)", strings.TrimSpace(stderr.String()))
+	}
+
+	var info struct {
+		Title        string  `json:"title"`
+		URL          string  `json:"url"`
+		Duration     float64 `json:"duration"`
+		WebPage      string  `json:"webpage_url"`
+		Extractor    string  `json:"extractor"`
+		ExtractorKey string  `json:"extractor_key"`
+	}
+	if err := json.Unmarshal([]byte(output), &info); err != nil {
+		preview := output
+		if len(preview) > 500 {
+			preview = preview[:500] + "..."
+		}
+		return nil, fmt.Errorf("yt-dlp JSON parse error: %w (output preview: %s)", err, preview)
+	}
+
+	streamLower := strings.ToLower(info.URL)
+	if strings.Contains(streamLower, "cf-preview-media.sndcdn.com") || int(info.Duration) > 0 && int(info.Duration) < 45 {
+		return nil, fmt.Errorf("soundcloud returned preview stream (%ds). Try another result / different query.", int(info.Duration))
+	}
+
+	return &Song{
+		Title:     info.Title,
+		URL:       info.WebPage,
+		StreamURL: info.URL,
+		Duration:  int(info.Duration),
+	}, nil
+}
+
+func splitProviderPrefix(q string) (provider string, term string) {
+	lower := strings.ToLower(strings.TrimSpace(q))
+	for _, p := range []string{"yt:", "sc:", "bc:"} {
+		if strings.HasPrefix(lower, p) {
+			return strings.TrimSuffix(p, ":"), strings.TrimSpace(q[len(p):])
+		}
+	}
+	return "", q
+}
+
+func isHTTPURL(s string) bool {
+	return strings.HasPrefix(s, "http://") || strings.HasPrefix(s, "https://")
+}
+
+func looksLikeDirectAudioURL(raw string) bool {
+	u, err := url.Parse(raw)
+	if err != nil {
+		return false
+	}
+	p := strings.ToLower(u.Path)
+	switch {
+	case strings.HasSuffix(p, ".mp3"),
