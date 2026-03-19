@@ -194,3 +194,101 @@ func looksLikeDirectAudioURL(raw string) bool {
 	p := strings.ToLower(u.Path)
 	switch {
 	case strings.HasSuffix(p, ".mp3"),
+		strings.HasSuffix(p, ".m4a"),
+		strings.HasSuffix(p, ".aac"),
+		strings.HasSuffix(p, ".ogg"),
+		strings.HasSuffix(p, ".opus"),
+		strings.HasSuffix(p, ".flac"),
+		strings.HasSuffix(p, ".wav"),
+		strings.HasSuffix(p, ".webm"),
+		strings.HasSuffix(p, ".m3u8"),
+		strings.HasSuffix(p, ".pls"),
+		strings.HasSuffix(p, ".m3u"),
+		strings.HasSuffix(p, ".mpd"):
+		return true
+	}
+	low := strings.ToLower(raw)
+	return strings.Contains(low, "icecast") || strings.Contains(low, "stream")
+}
+
+func deriveTitleFromURL(raw string) string {
+	u, err := url.Parse(raw)
+	if err != nil {
+		return "Direct stream"
+	}
+	base := path.Base(u.Path)
+	base = strings.TrimSpace(base)
+	if base == "" || base == "/" || base == "." {
+		return "Direct stream"
+	}
+	return base
+}
+
+func (d *DirectBackend) Play(vc *discordgo.VoiceConnection, song *Song, volume int, done chan<- struct{}) {
+	defer func() { done <- struct{}{} }()
+
+	d.mu.Lock()
+	d.stopFlag = false
+	d.volume = volume
+	d.mu.Unlock()
+
+	streamURL := song.StreamURL
+	if streamURL == "" {
+		slog.Info("no stream URL, re-resolving", "title", song.Title)
+		resolved, err := d.ResolveSong(song.URL)
+		if err != nil {
+			slog.Warn("failed to resolve song", "error", err)
+			return
+		}
+		streamURL = resolved.StreamURL
+	}
+
+	d.mu.Lock()
+	vol := d.volume
+	d.mu.Unlock()
+	volFilter := fmt.Sprintf("volume=%.2f", float64(vol)/100.0)
+
+	ffmpegCmd := exec.Command(d.ffmpegPath,
+		"-loglevel", "error",
+		"-rw_timeout", "15000000",
+		"-reconnect", "1",
+		"-reconnect_streamed", "1",
+		"-reconnect_at_eof", "1",
+		"-reconnect_delay_max", "5",
+		"-i", streamURL,
+
+		"-ar", "48000",
+		"-ac", "2",
+
+		"-af", volFilter,
+		"-c:a", "libopus",
+		"-b:a", "96K",
+		"-vbr", "on",
+		"-frame_duration", "20",
+		"-application", "audio",
+		"-vn",
+		"-f", "ogg",
+		"pipe:1",
+	)
+
+	ffmpegOut, err := ffmpegCmd.StdoutPipe()
+	if err != nil {
+		slog.Warn("ffmpeg stdout pipe error", "error", err)
+		return
+	}
+
+	ffmpegErr, _ := ffmpegCmd.StderrPipe()
+
+	if err := ffmpegCmd.Start(); err != nil {
+		slog.Warn("ffmpeg start error", "error", err)
+		return
+	}
+
+	go func() {
+		if ffmpegErr == nil {
+			return
+		}
+		b, _ := io.ReadAll(ffmpegErr)
+		s := strings.TrimSpace(string(b))
+		if s != "" {
+			slog.Warn("ffmpeg stderr", "output", s)
