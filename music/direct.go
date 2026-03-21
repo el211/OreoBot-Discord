@@ -292,3 +292,81 @@ func (d *DirectBackend) Play(vc *discordgo.VoiceConnection, song *Song, volume i
 		s := strings.TrimSpace(string(b))
 		if s != "" {
 			slog.Warn("ffmpeg stderr", "output", s)
+		}
+	}()
+
+	d.mu.Lock()
+	d.ffmpegCmd = ffmpegCmd
+	d.mu.Unlock()
+
+	defer func() {
+		d.mu.Lock()
+		d.ffmpegCmd = nil
+		stopped := d.stopFlag
+		d.mu.Unlock()
+
+		if stopped && ffmpegCmd.Process != nil {
+			_ = ffmpegCmd.Process.Kill()
+		}
+	}()
+
+	if err := vc.Speaking(true); err != nil {
+		slog.Warn("speaking error", "error", err)
+		return
+	}
+	defer func() { _ = vc.Speaking(false) }()
+
+	dec := ogg.NewPacketDecoder(ogg.NewDecoder(ffmpegOut))
+
+	ticker := time.NewTicker(20 * time.Millisecond)
+	defer ticker.Stop()
+
+	for {
+		d.mu.Lock()
+		stopped := d.stopFlag
+		d.mu.Unlock()
+		if stopped || vc.Status != discordgo.VoiceConnectionStatusReady {
+			return
+		}
+
+		packet, _, err := dec.Decode()
+		if err != nil {
+			if err == io.EOF {
+				slog.Info("stream ended")
+			} else {
+				slog.Warn("ogg decode error", "error", err)
+			}
+			return
+		}
+
+		if bytes.HasPrefix(packet, []byte("OpusHead")) || bytes.HasPrefix(packet, []byte("OpusTags")) {
+			continue
+		}
+		if len(packet) == 0 {
+			continue
+		}
+
+		<-ticker.C
+		select {
+		case vc.OpusSend <- packet:
+		default:
+		}
+	}
+}
+
+func (d *DirectBackend) Stop() {
+	d.mu.Lock()
+	defer d.mu.Unlock()
+	d.stopFlag = true
+	if d.ffmpegCmd != nil && d.ffmpegCmd.Process != nil {
+		_ = d.ffmpegCmd.Process.Kill()
+	}
+}
+
+func (d *DirectBackend) SetVolume(vol int) {
+	d.mu.Lock()
+	d.volume = vol
+	d.mu.Unlock()
+}
+
+func (d *DirectBackend) Cleanup() { d.Stop() }
