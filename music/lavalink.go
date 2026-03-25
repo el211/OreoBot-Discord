@@ -96,3 +96,100 @@ func (l *LavalinkBackend) ping() error {
 
 	client := &http.Client{Timeout: 5 * time.Second}
 	resp, err := client.Do(req)
+	if err != nil {
+		return err
+	}
+	defer resp.Body.Close()
+
+	if resp.StatusCode != 200 {
+		b, _ := io.ReadAll(resp.Body)
+		return fmt.Errorf("Lavalink returned status %d: %s", resp.StatusCode, string(b))
+	}
+	return nil
+}
+
+type llReady struct {
+	Op        string `json:"op"`
+	SessionID string `json:"sessionId"`
+}
+
+func (l *LavalinkBackend) connectLLWS() error {
+	u := l.llWSURL()
+
+	headers := http.Header{}
+	headers.Set("Authorization", l.password)
+
+	if l.session == nil || l.session.State == nil || l.session.State.User == nil {
+		return fmt.Errorf("discord session not ready (State.User is nil)")
+	}
+	headers.Set("User-Id", l.session.State.User.ID)
+	headers.Set("Client-Name", "OreoBot2-Go")
+
+	d := websocket.Dialer{HandshakeTimeout: 10 * time.Second}
+	conn, _, err := d.Dial(u, headers)
+	if err != nil {
+		return fmt.Errorf("ws dial %s: %w", u, err)
+	}
+
+	_ = conn.SetReadDeadline(time.Now().Add(15 * time.Second))
+	var ready llReady
+	for {
+		_, msg, err := conn.ReadMessage()
+		if err != nil {
+			_ = conn.Close()
+			return fmt.Errorf("ws read: %w", err)
+		}
+		if err := json.Unmarshal(msg, &ready); err == nil && strings.EqualFold(ready.Op, "ready") && ready.SessionID != "" {
+			break
+		}
+	}
+	_ = conn.SetReadDeadline(time.Time{})
+
+	l.wsMu.Lock()
+	oldConn := l.ws
+	l.ws = conn
+	l.llSession = ready.SessionID
+	l.wsMu.Unlock()
+
+	if oldConn != nil {
+		_ = oldConn.Close()
+	}
+
+	slog.Info("lavalink WS connected", "sessionId", ready.SessionID)
+
+	go l.llWSReadLoop()
+	return nil
+}
+
+func (l *LavalinkBackend) llWSReadLoop() {
+	l.wsMu.RLock()
+	myConn := l.ws
+	l.wsMu.RUnlock()
+
+	if myConn == nil {
+		return
+	}
+
+	for {
+		l.wsMu.RLock()
+		currentConn := l.ws
+		l.wsMu.RUnlock()
+		if currentConn != myConn {
+			return
+		}
+
+		_, msg, err := myConn.ReadMessage()
+		if err == nil {
+			l.handleLLEvent(msg)
+			continue
+		}
+
+		l.wsMu.Lock()
+		if l.ws == myConn {
+			l.ws = nil
+			l.llSession = ""
+		}
+		l.wsMu.Unlock()
+
+		_ = myConn.Close()
+		slog.Warn("lavalink WS disconnected", "error", err)
