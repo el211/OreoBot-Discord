@@ -193,3 +193,102 @@ func (l *LavalinkBackend) llWSReadLoop() {
 
 		_ = myConn.Close()
 		slog.Warn("lavalink WS disconnected", "error", err)
+
+		for attempt := 1; attempt <= 10; attempt++ {
+			time.Sleep(time.Duration(attempt) * time.Second)
+			if err := l.connectLLWS(); err == nil {
+				return
+			}
+			slog.Warn("lavalink reconnect attempt failed", "attempt", attempt)
+		}
+		slog.Error("gave up reconnecting to lavalink after 10 attempts")
+		return
+	}
+}
+
+func (l *LavalinkBackend) handleLLEvent(msg []byte) {
+	var ev struct {
+		Op      string `json:"op"`
+		Type    string `json:"type"`
+		GuildID string `json:"guildId"`
+		Track   *struct {
+			Info struct {
+				Title string `json:"title"`
+				URI   string `json:"uri"`
+			} `json:"info"`
+		} `json:"track"`
+		Exception *struct {
+			Message  string `json:"message"`
+			Severity string `json:"severity"`
+			Cause    string `json:"cause"`
+		} `json:"exception"`
+		Reason      string `json:"reason"`
+		ThresholdMs int64  `json:"thresholdMs"`
+		Code        int    `json:"code"`
+		ByRemote    bool   `json:"byRemote"`
+	}
+	if err := json.Unmarshal(msg, &ev); err != nil {
+		return
+	}
+
+	switch ev.Op {
+	case "event":
+		trackTitle := "(unknown)"
+		if ev.Track != nil {
+			trackTitle = ev.Track.Info.Title
+		}
+
+		switch ev.Type {
+		case "TrackStartEvent":
+			slog.Info("lavalink track start", "title", trackTitle, "guild", ev.GuildID)
+
+		case "TrackEndEvent":
+			slog.Info("lavalink track end", "title", trackTitle, "reason", ev.Reason, "guild", ev.GuildID)
+
+		case "TrackExceptionEvent":
+			excMsg := "(no details)"
+			excSev := ""
+			excCause := ""
+			if ev.Exception != nil {
+				excMsg = ev.Exception.Message
+				excSev = ev.Exception.Severity
+				excCause = ev.Exception.Cause
+			}
+			slog.Warn("lavalink track exception", "title", trackTitle, "message", excMsg, "severity", excSev, "cause", excCause, "guild", ev.GuildID)
+
+		case "TrackStuckEvent":
+			slog.Warn("lavalink track stuck", "title", trackTitle, "thresholdMs", ev.ThresholdMs, "guild", ev.GuildID)
+
+		case "WebSocketClosedEvent":
+			slog.Warn("lavalink websocket closed", "code", ev.Code, "byRemote", ev.ByRemote, "guild", ev.GuildID)
+
+		default:
+			slog.Info("lavalink event", "type", ev.Type, "guild", ev.GuildID)
+		}
+
+	case "stats":
+	default:
+		if ev.Op != "ready" && ev.Op != "playerUpdate" {
+			slog.Info("lavalink ws op", "op", ev.Op)
+		}
+	}
+}
+
+func (l *LavalinkBackend) getLLSession() string {
+	l.wsMu.RLock()
+	defer l.wsMu.RUnlock()
+	return l.llSession
+}
+
+func (l *LavalinkBackend) ensureLLSession() (string, error) {
+	if sid := l.getLLSession(); sid != "" {
+		return sid, nil
+	}
+	if err := l.connectLLWS(); err != nil {
+		return "", err
+	}
+	if sid := l.getLLSession(); sid != "" {
+		return sid, nil
+	}
+	return "", fmt.Errorf("no lavalink sessionId after reconnect")
+}
