@@ -292,3 +292,101 @@ func (l *LavalinkBackend) ensureLLSession() (string, error) {
 	}
 	return "", fmt.Errorf("no lavalink sessionId after reconnect")
 }
+
+func isHTTP(s string) bool {
+	s = strings.TrimSpace(strings.ToLower(s))
+	return strings.HasPrefix(s, "http://") || strings.HasPrefix(s, "https://")
+}
+
+func (l *LavalinkBackend) ResolveSong(query string) (*Song, error) {
+	q := strings.TrimSpace(query)
+	if q == "" {
+		return nil, fmt.Errorf("empty query")
+	}
+
+	identifier := q
+	if !isHTTP(q) {
+		identifier = "ytsearch:" + q
+	}
+
+	u := fmt.Sprintf("%s/v4/loadtracks?identifier=%s", l.baseURL(), url.QueryEscape(identifier))
+	req, _ := http.NewRequest("GET", u, nil)
+	req.Header.Set("Authorization", l.password)
+
+	client := &http.Client{Timeout: 15 * time.Second}
+	resp, err := client.Do(req)
+	if err != nil {
+		return nil, fmt.Errorf("lavalink loadtracks: %w", err)
+	}
+	defer resp.Body.Close()
+
+	body, _ := io.ReadAll(resp.Body)
+
+	var result struct {
+		LoadType string          `json:"loadType"`
+		Data     json.RawMessage `json:"data"`
+	}
+	if err := json.Unmarshal(body, &result); err != nil {
+		return nil, fmt.Errorf("lavalink parse: %w", err)
+	}
+
+	switch result.LoadType {
+	case "track":
+		var track lavalinkTrack
+		_ = json.Unmarshal(result.Data, &track)
+		return trackToSong(&track), nil
+
+	case "search":
+		var tracks []lavalinkTrack
+		_ = json.Unmarshal(result.Data, &tracks)
+		if len(tracks) == 0 {
+			return nil, fmt.Errorf("no results found for: %s", query)
+		}
+		return trackToSong(&tracks[0]), nil
+
+	case "playlist":
+		var playlist struct {
+			Info   struct{ Name string } `json:"info"`
+			Tracks []lavalinkTrack       `json:"tracks"`
+		}
+		_ = json.Unmarshal(result.Data, &playlist)
+		if len(playlist.Tracks) == 0 {
+			return nil, fmt.Errorf("empty playlist")
+		}
+		return trackToSong(&playlist.Tracks[0]), nil
+
+	case "empty":
+		return nil, fmt.Errorf("no results found for: %s", query)
+
+	case "error":
+		return nil, fmt.Errorf("lavalink error loading track")
+
+	default:
+		return nil, fmt.Errorf("unknown loadType: %s", result.LoadType)
+	}
+}
+
+type lavalinkTrack struct {
+	Encoded string `json:"encoded"`
+	Info    struct {
+		Title  string `json:"title"`
+		Length int64  `json:"length"`
+		URI    string `json:"uri"`
+	} `json:"info"`
+}
+
+func trackToSong(t *lavalinkTrack) *Song {
+	return &Song{
+		Title:     t.Info.Title,
+		URL:       t.Info.URI,
+		StreamURL: t.Encoded,
+		Duration:  int(t.Info.Length / 1000),
+	}
+}
+
+func waitVoiceReady(guildID string, timeout time.Duration) (token, endpoint, sessionID string, err error) {
+	deadline := time.Now().Add(timeout)
+	for time.Now().Before(deadline) {
+		tok, endp, sid, ok := getVoiceInfo(guildID)
+		if ok {
+			return tok, endp, sid, nil
