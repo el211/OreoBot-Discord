@@ -390,3 +390,101 @@ func waitVoiceReady(guildID string, timeout time.Duration) (token, endpoint, ses
 		tok, endp, sid, ok := getVoiceInfo(guildID)
 		if ok {
 			return tok, endp, sid, nil
+		}
+		time.Sleep(50 * time.Millisecond)
+	}
+	tok, endp, sid, _ := getVoiceInfo(guildID)
+	return tok, endp, sid, fmt.Errorf("voice not ready (missing token/endpoint/sessionId)")
+}
+
+func (l *LavalinkBackend) updateVoice(llSessionID, guildID string) error {
+	token, endpoint, voiceSessionID, err := waitVoiceReady(guildID, 8*time.Second)
+	if err != nil {
+		return err
+	}
+
+	slog.Info("lavalink voice info captured", "token", truncate(token, 8), "endpoint", endpoint, "sessionId", truncate(voiceSessionID, 12))
+
+	err = l.patchVoice(llSessionID, guildID, token, endpoint, voiceSessionID)
+	if err == nil {
+		return nil
+	}
+
+	if strings.Contains(err.Error(), "404") || strings.Contains(err.Error(), "Session not found") {
+		slog.Warn("lavalink session stale, reconnecting WS and retrying voice update")
+		if reconnErr := l.connectLLWS(); reconnErr != nil {
+			return fmt.Errorf("voice update failed (%v) and reconnect failed: %w", err, reconnErr)
+		}
+		newSID := l.getLLSession()
+		if newSID == "" {
+			return fmt.Errorf("voice update failed (%v) and no new session after reconnect", err)
+		}
+		slog.Info("lavalink reconnected, retrying voice update", "sessionId", newSID)
+
+		token2, endpoint2, voiceSID2, err2 := waitVoiceReady(guildID, 5*time.Second)
+		if err2 == nil {
+			token, endpoint, voiceSessionID = token2, endpoint2, voiceSID2
+		}
+
+		return l.patchVoice(newSID, guildID, token, endpoint, voiceSessionID)
+	}
+
+	return err
+}
+
+func (l *LavalinkBackend) patchVoice(llSessionID, guildID, token, endpoint, voiceSessionID string) error {
+	playerURL := fmt.Sprintf("%s/v4/sessions/%s/players/%s", l.baseURL(), llSessionID, guildID)
+
+	l.mu.Lock()
+	channelID := l.currentChannelID
+	l.mu.Unlock()
+
+	payload := map[string]any{
+		"voice": map[string]any{
+			"token":     token,
+			"endpoint":  endpoint,
+			"sessionId": voiceSessionID,
+			"channelId": channelID,
+		},
+	}
+
+	b, _ := json.Marshal(payload)
+	req, _ := http.NewRequest("PATCH", playerURL, bytes.NewReader(b))
+	req.Header.Set("Authorization", l.password)
+	req.Header.Set("Content-Type", "application/json")
+
+	client := &http.Client{Timeout: 12 * time.Second}
+	resp, err := client.Do(req)
+	if err != nil {
+		return err
+	}
+	defer resp.Body.Close()
+
+	if resp.StatusCode < 200 || resp.StatusCode >= 300 {
+		body, _ := io.ReadAll(resp.Body)
+		return fmt.Errorf("voice update failed: %d %s", resp.StatusCode, string(body))
+	}
+	return nil
+}
+
+func truncate(s string, n int) string {
+	if len(s) <= n {
+		return s
+	}
+	return s[:n] + "..."
+}
+
+func (l *LavalinkBackend) Play(vc *discordgo.VoiceConnection, song *Song, volume int, done chan<- struct{}) {
+	defer func() { done <- struct{}{} }()
+
+	l.mu.Lock()
+	l.stopFlag = false
+	l.volume = volume
+	l.currentGuildID = vc.GuildID
+	l.mu.Unlock()
+
+	llSessionID, err := l.ensureLLSession()
+	if err != nil {
+		slog.Warn("lavalink WS session error", "error", err)
+		return
+	}
