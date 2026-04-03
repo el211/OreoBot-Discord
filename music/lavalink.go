@@ -488,3 +488,101 @@ func (l *LavalinkBackend) Play(vc *discordgo.VoiceConnection, song *Song, volume
 		slog.Warn("lavalink WS session error", "error", err)
 		return
 	}
+
+	if err := l.updateVoice(llSessionID, vc.GuildID); err != nil {
+		slog.Warn("lavalink voice update error", "error", err)
+		return
+	}
+
+	llSessionID = l.getLLSession()
+	if llSessionID == "" {
+		slog.Warn("lavalink no session after voice update")
+		return
+	}
+
+	playerURL := fmt.Sprintf("%s/v4/sessions/%s/players/%s", l.baseURL(), llSessionID, vc.GuildID)
+
+	startPayload := map[string]any{
+		"track":  map[string]any{"encoded": song.StreamURL},
+		"volume": volume,
+		"paused": false,
+	}
+	startJSON, _ := json.Marshal(startPayload)
+
+	req, _ := http.NewRequest("PATCH", playerURL, bytes.NewReader(startJSON))
+	req.Header.Set("Authorization", l.password)
+	req.Header.Set("Content-Type", "application/json")
+
+	client := &http.Client{Timeout: 12 * time.Second}
+	resp, err := client.Do(req)
+	if err != nil {
+		slog.Warn("lavalink player start error", "error", err)
+		return
+	}
+
+	if resp.StatusCode < 200 || resp.StatusCode >= 300 {
+		body, _ := io.ReadAll(resp.Body)
+		slog.Warn("lavalink player start failed", "status", resp.StatusCode, "body", string(body))
+		_ = resp.Body.Close()
+		return
+	}
+	_ = resp.Body.Close()
+
+	slog.Info("lavalink track started", "title", song.Title, "session", llSessionID, "guild", vc.GuildID)
+
+	time.Sleep(3 * time.Second)
+
+	ticker := time.NewTicker(2 * time.Second)
+	defer ticker.Stop()
+
+	for range ticker.C {
+		l.mu.Lock()
+		stopped := l.stopFlag
+		l.mu.Unlock()
+
+		if stopped {
+			curSID := l.getLLSession()
+			if curSID != "" {
+				_ = l.destroyPlayer(curSID, vc.GuildID)
+			}
+			return
+		}
+
+		curSID := l.getLLSession()
+		if curSID == "" {
+			slog.Warn("lavalink lost session during playback")
+			return
+		}
+
+		playing, err := l.isPlaying(curSID, vc.GuildID)
+		if err != nil {
+			slog.Warn("lavalink isPlaying error", "error", err)
+			return
+		}
+		if !playing {
+			slog.Info("lavalink track finished", "guild", vc.GuildID)
+			return
+		}
+	}
+}
+
+func (l *LavalinkBackend) isPlaying(llSessionID, guildID string) (bool, error) {
+	u := fmt.Sprintf("%s/v4/sessions/%s/players/%s", l.baseURL(), llSessionID, guildID)
+	req, _ := http.NewRequest("GET", u, nil)
+	req.Header.Set("Authorization", l.password)
+
+	client := &http.Client{Timeout: 6 * time.Second}
+	resp, err := client.Do(req)
+	if err != nil {
+		return false, err
+	}
+	defer resp.Body.Close()
+
+	if resp.StatusCode == 404 {
+		slog.Warn("lavalink player not found", "guild", guildID)
+		return false, nil
+	}
+
+	body, _ := io.ReadAll(resp.Body)
+
+	var player struct {
