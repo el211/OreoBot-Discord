@@ -586,3 +586,101 @@ func (l *LavalinkBackend) isPlaying(llSessionID, guildID string) (bool, error) {
 	body, _ := io.ReadAll(resp.Body)
 
 	var player struct {
+		Track *json.RawMessage `json:"track"`
+		State struct {
+			Position  int64 `json:"position"`
+			Connected bool  `json:"connected"`
+		} `json:"state"`
+	}
+	_ = json.Unmarshal(body, &player)
+
+	hasTrack := player.Track != nil && string(*player.Track) != "null"
+	if !hasTrack {
+		slog.Info("lavalink no track active", "guild", guildID, "connected", player.State.Connected)
+	}
+
+	return hasTrack, nil
+}
+
+func (l *LavalinkBackend) destroyPlayer(llSessionID, guildID string) error {
+	u := fmt.Sprintf("%s/v4/sessions/%s/players/%s", l.baseURL(), llSessionID, guildID)
+	req, _ := http.NewRequest("DELETE", u, nil)
+	req.Header.Set("Authorization", l.password)
+
+	client := &http.Client{Timeout: 6 * time.Second}
+	resp, err := client.Do(req)
+	if err != nil {
+		return err
+	}
+	_ = resp.Body.Close()
+	return nil
+}
+
+func (l *LavalinkBackend) Stop() {
+	l.mu.Lock()
+	l.stopFlag = true
+	l.mu.Unlock()
+}
+
+func (l *LavalinkBackend) SetVolume(vol int) {
+	l.mu.Lock()
+	l.volume = vol
+	guildID := l.currentGuildID
+	l.mu.Unlock()
+
+	if guildID == "" {
+		return
+	}
+
+	llSessionID, err := l.ensureLLSession()
+	if err != nil {
+		return
+	}
+
+	u := fmt.Sprintf("%s/v4/sessions/%s/players/%s", l.baseURL(), llSessionID, guildID)
+
+	payload, _ := json.Marshal(map[string]any{"volume": vol})
+	req, _ := http.NewRequest("PATCH", u, bytes.NewReader(payload))
+	req.Header.Set("Authorization", l.password)
+	req.Header.Set("Content-Type", "application/json")
+
+	client := &http.Client{Timeout: 6 * time.Second}
+	resp, err := client.Do(req)
+	if err == nil {
+		_ = resp.Body.Close()
+	}
+}
+
+func (l *LavalinkBackend) SetPaused(paused bool) {
+	l.mu.Lock()
+	guildID := l.currentGuildID
+	l.mu.Unlock()
+
+	if guildID == "" {
+		return
+	}
+
+	llSessionID, err := l.ensureLLSession()
+	if err != nil {
+		return
+	}
+
+	u := fmt.Sprintf("%s/v4/sessions/%s/players/%s", l.baseURL(), llSessionID, guildID)
+
+	payload, _ := json.Marshal(map[string]any{"paused": paused})
+	req, _ := http.NewRequest("PATCH", u, bytes.NewReader(payload))
+	req.Header.Set("Authorization", l.password)
+	req.Header.Set("Content-Type", "application/json")
+
+	client := &http.Client{Timeout: 6 * time.Second}
+	resp, err := client.Do(req)
+	if err == nil {
+		_ = resp.Body.Close()
+	}
+}
+
+func (l *LavalinkBackend) Cleanup() {
+	l.Stop()
+	l.wsMu.Lock()
+	if l.ws != nil {
+		_ = l.ws.Close()
