@@ -684,3 +684,8 @@ func (l *LavalinkBackend) Cleanup() {
 	l.wsMu.Lock()
 	if l.ws != nil {
 		_ = l.ws.Close()
+		l.ws = nil
+	}
+	l.llSession = ""
+	l.wsMu.Unlock()
+}
