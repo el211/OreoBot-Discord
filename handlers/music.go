@@ -193,3 +193,102 @@ func (h *Handler) handleQueue(s *discordgo.Session, i *discordgo.InteractionCrea
 	} else {
 		sb.WriteString(lang.T("music_queue_nothing"))
 	}
+
+	if len(queue) == 0 {
+		sb.WriteString(lang.T("music_queue_empty"))
+	} else {
+		sb.WriteString(lang.T("music_queue_header", "count", fmt.Sprintf("%d", len(queue))))
+		max := 15
+		if len(queue) < max {
+			max = len(queue)
+		}
+		for idx := 0; idx < max; idx++ {
+			dur := music.FormatDuration(queue[idx].Duration)
+			sb.WriteString(lang.T("music_queue_entry",
+				"pos", fmt.Sprintf("%d", idx+1),
+				"title", queue[idx].Title,
+				"url", queue[idx].URL,
+				"duration", dur,
+				"added_by", queue[idx].AddedBy,
+			))
+		}
+		if len(queue) > 15 {
+			sb.WriteString(lang.T("music_queue_more", "count", fmt.Sprintf("%d", len(queue)-15)))
+		}
+	}
+
+	sb.WriteString(lang.T("music_queue_footer",
+		"volume", fmt.Sprintf("%d", vol),
+		"backend", h.musicMgr.BackendName(),
+	))
+
+	respondEmbed(s, i, &discordgo.MessageEmbed{
+		Title:       lang.T("music_queue_embed_title"),
+		Description: sb.String(),
+		Color:       0x5865F2,
+	}, true)
+}
+
+func (h *Handler) handleVolume(s *discordgo.Session, i *discordgo.InteractionCreate) {
+	if !h.isDJ(s, i) {
+		respond(s, i, lang.T("music_dj_required_vol"), true)
+		return
+	}
+
+	opts := optionMap(i)
+	level := int(opts["level"].IntValue())
+	if level < 0 {
+		level = 0
+	}
+	if level > 100 {
+		level = 100
+	}
+
+	player := h.musicMgr.GetPlayer(i.GuildID)
+	player.SetVolume(level)
+	respond(s, i, lang.T("music_volume_set", "level", fmt.Sprintf("%d", level)), false)
+}
+
+func (h *Handler) handleNowPlaying(s *discordgo.Session, i *discordgo.InteractionCreate) {
+	player := h.musicMgr.GetPlayer(i.GuildID)
+
+	player.Mu().Lock()
+	np := player.NowPlaying
+	vol := player.Volume
+	player.Mu().Unlock()
+
+	if np == nil {
+		respond(s, i, lang.T("music_nothing_playing"), true)
+		return
+	}
+
+	dur := music.FormatDuration(np.Duration)
+
+	respondEmbed(s, i, &discordgo.MessageEmbed{
+		Title: lang.T("music_nowplaying_embed_title"),
+		Description: lang.T("music_nowplaying_embed_desc",
+			"title", np.Title,
+			"url", np.URL,
+			"duration", dur,
+			"volume", fmt.Sprintf("%d", vol),
+			"added_by", np.AddedBy,
+			"backend", h.musicMgr.BackendName(),
+		),
+		Color: 0x1DB954,
+	}, false)
+}
+
+func (h *Handler) handlePause(s *discordgo.Session, i *discordgo.InteractionCreate) {
+	player := h.musicMgr.GetPlayer(i.GuildID)
+
+	player.Mu().Lock()
+	if !player.Playing || player.Paused {
+		player.Mu().Unlock()
+		respond(s, i, lang.T("music_nothing_to_pause"), true)
+		return
+	}
+	player.Paused = true
+	backend := player.Backend()
+	player.Mu().Unlock()
+
+	if b, ok := backend.(interface{ SetPaused(bool) }); ok {
