@@ -292,3 +292,28 @@ func (h *Handler) handlePause(s *discordgo.Session, i *discordgo.InteractionCrea
 	player.Mu().Unlock()
 
 	if b, ok := backend.(interface{ SetPaused(bool) }); ok {
+		b.SetPaused(true)
+	}
+
+	respond(s, i, lang.T("music_paused"), false)
+}
+
+func (h *Handler) handleResume(s *discordgo.Session, i *discordgo.InteractionCreate) {
+	player := h.musicMgr.GetPlayer(i.GuildID)
+
+	player.Mu().Lock()
+	if !player.Paused {
+		player.Mu().Unlock()
+		respond(s, i, lang.T("music_not_paused"), true)
+		return
+	}
+	player.Paused = false
+	backend := player.Backend()
+	player.Mu().Unlock()
+
+	if b, ok := backend.(interface{ SetPaused(bool) }); ok {
+		b.SetPaused(false)
+	}
+
+	respond(s, i, lang.T("music_resumed"), false)
+}
