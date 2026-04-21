@@ -95,3 +95,77 @@ func (c *Client) IsConnected() bool {
 	defer c.mu.Unlock()
 	return c.conn != nil
 }
+
+type rconPacket struct {
+	ID   int32
+	Type int32
+	Body string
+}
+
+func (c *Client) reconnectLocked() error {
+	conn, err := net.DialTimeout("tcp", c.addr, 5*time.Second)
+	if err != nil {
+		return err
+	}
+	c.conn = conn
+
+	resp, err := c.sendPacketLocked(packetTypeAuth, c.password)
+	if err != nil {
+		c.conn.Close()
+		c.conn = nil
+		return err
+	}
+	if resp.ID == -1 {
+		c.conn.Close()
+		c.conn = nil
+		return errors.New("auth failed")
+	}
+	return nil
+}
+
+func (c *Client) sendPacketLocked(pktType int32, body string) (*rconPacket, error) {
+	id := atomic.AddInt32(&c.reqID, 1)
+
+	payload := []byte(body)
+	pktLen := int32(4 + 4 + len(payload) + 2)
+
+	buf := new(bytes.Buffer)
+	binary.Write(buf, binary.LittleEndian, pktLen)
+	binary.Write(buf, binary.LittleEndian, id)
+	binary.Write(buf, binary.LittleEndian, pktType)
+	buf.Write(payload)
+	buf.Write([]byte{0, 0})
+
+	_ = c.conn.SetWriteDeadline(time.Now().Add(5 * time.Second))
+	if _, err := c.conn.Write(buf.Bytes()); err != nil {
+		return nil, err
+	}
+
+	_ = c.conn.SetReadDeadline(time.Now().Add(10 * time.Second))
+	return readPacket(c.conn)
+}
+
+func readPacket(r io.Reader) (*rconPacket, error) {
+	var pktLen int32
+	if err := binary.Read(r, binary.LittleEndian, &pktLen); err != nil {
+		return nil, err
+	}
+	if pktLen < 10 || pktLen > 4096+10 {
+		return nil, fmt.Errorf("invalid packet length: %d", pktLen)
+	}
+
+	data := make([]byte, pktLen)
+	if _, err := io.ReadFull(r, data); err != nil {
+		return nil, err
+	}
+
+	pkt := &rconPacket{
+		ID:   int32(binary.LittleEndian.Uint32(data[0:4])),
+		Type: int32(binary.LittleEndian.Uint32(data[4:8])),
+	}
+
+	if len(data) > 10 {
+		pkt.Body = string(data[8 : len(data)-2])
+	}
+	return pkt, nil
+}
