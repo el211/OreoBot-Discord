@@ -96,3 +96,100 @@ func (f *fileLinkStore) PopConfirmed() ([]MCLinkConfirmation, error) {
 		filePath := mcLinkPendingDir + "/" + e.Name()
 
 		data, err := os.ReadFile(filePath)
+		if err != nil {
+			continue
+		}
+
+		var payload struct {
+			UUID      string `json:"uuid"`
+			Username  string `json:"username"`
+			Confirmed bool   `json:"confirmed"`
+		}
+		if err := json.Unmarshal(data, &payload); err != nil || !payload.Confirmed {
+			pendingLinksMu.Lock()
+			p, ok := pendingLinks[code]
+			if ok && time.Now().After(p.expiresAt) {
+				delete(pendingLinks, code)
+				_ = os.Remove(filePath)
+			}
+			pendingLinksMu.Unlock()
+			continue
+		}
+
+		discordID, valid := ConsumeLinkCode(code)
+		if !valid {
+			_ = os.Remove(filePath)
+			continue
+		}
+
+		_ = os.Remove(filePath)
+		results = append(results, MCLinkConfirmation{
+			Code:      code,
+			DiscordID: discordID,
+			UUID:      payload.UUID,
+			Username:  payload.Username,
+		})
+	}
+	return results, nil
+}
+
+func (f *fileLinkStore) SaveLink(link MCLink) error {
+	_ = os.MkdirAll(mcLinkDir, 0755)
+	data, err := json.MarshalIndent(link, "", "  ")
+	if err != nil {
+		return err
+	}
+	return os.WriteFile(fmt.Sprintf("%s/%s.json", mcLinkDir, link.DiscordID), data, 0644)
+}
+
+func (f *fileLinkStore) LoadLink(discordID string) (*MCLink, error) {
+	data, err := os.ReadFile(fmt.Sprintf("%s/%s.json", mcLinkDir, discordID))
+	if err != nil {
+		return nil, err
+	}
+	var link MCLink
+	if err := json.Unmarshal(data, &link); err != nil {
+		return nil, err
+	}
+	return &link, nil
+}
+
+func (f *fileLinkStore) DeleteLink(discordID string) error {
+	return os.Remove(fmt.Sprintf("%s/%s.json", mcLinkDir, discordID))
+}
+
+func (f *fileLinkStore) ListLinks() ([]MCLink, error) {
+	entries, err := os.ReadDir(mcLinkDir)
+	if err != nil {
+		return nil, err
+	}
+	var links []MCLink
+	for _, e := range entries {
+		if !strings.HasSuffix(e.Name(), ".json") {
+			continue
+		}
+		discordID := strings.TrimSuffix(e.Name(), ".json")
+		link, err := f.LoadLink(discordID)
+		if err != nil {
+			continue
+		}
+		links = append(links, *link)
+	}
+	return links, nil
+}
+
+type mongoLinkStore struct {
+	pending   *mongo.Collection
+	confirmed *mongo.Collection
+	links     *mongo.Collection
+}
+
+func newMongoLinkStore(cfg *config.Config) (*mongoLinkStore, error) {
+	uri := cfg.Database.MongoDB.URI
+	db := cfg.Database.MongoDB.Database
+	if uri == "" || db == "" {
+		return nil, fmt.Errorf("database.mongodb.uri and database.mongodb.database must be set in config.json to use link_backend=mongodb")
+	}
+
+	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
+	defer cancel()
