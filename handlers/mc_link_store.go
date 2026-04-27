@@ -193,3 +193,102 @@ func newMongoLinkStore(cfg *config.Config) (*mongoLinkStore, error) {
 
 	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
 	defer cancel()
+
+	client, err := mongo.Connect(options.Client().ApplyURI(uri))
+	if err != nil {
+		return nil, fmt.Errorf("connect: %w", err)
+	}
+	if err := client.Ping(ctx, nil); err != nil {
+		return nil, fmt.Errorf("ping: %w", err)
+	}
+
+	mdb := client.Database(db)
+	store := &mongoLinkStore{
+		pending:   mdb.Collection("discord_link_pending"),
+		confirmed: mdb.Collection("discord_link_confirmed"),
+		links:     mdb.Collection("discord_links"),
+	}
+
+	store.pending.Indexes().CreateOne(ctx, mongo.IndexModel{
+		Keys:    bson.D{{Key: "code", Value: 1}},
+		Options: options.Index().SetUnique(true),
+	})
+	store.pending.Indexes().CreateOne(ctx, mongo.IndexModel{
+		Keys:    bson.D{{Key: "expires_at", Value: 1}},
+		Options: options.Index().SetExpireAfterSeconds(0),
+	})
+	store.links.Indexes().CreateOne(ctx, mongo.IndexModel{
+		Keys:    bson.D{{Key: "discord_id", Value: 1}},
+		Options: options.Index().SetUnique(true),
+	})
+	store.links.Indexes().CreateOne(ctx, mongo.IndexModel{
+		Keys: bson.D{{Key: "uuid", Value: 1}},
+	})
+
+	return store, nil
+}
+
+func (m *mongoLinkStore) SavePendingCode(code, discordID, guildID string, expiresAt time.Time) error {
+	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
+	defer cancel()
+
+	_, _ = m.pending.DeleteMany(ctx, bson.M{"discord_id": discordID})
+
+	_, err := m.pending.InsertOne(ctx, bson.M{
+		"code":       code,
+		"discord_id": discordID,
+		"guild_id":   guildID,
+		"expires_at": expiresAt,
+		"created_at": time.Now(),
+	})
+	return err
+}
+
+func (m *mongoLinkStore) PopConfirmed() ([]MCLinkConfirmation, error) {
+	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
+	defer cancel()
+
+	cursor, err := m.confirmed.Find(ctx, bson.M{})
+	if err != nil {
+		return nil, err
+	}
+	defer cursor.Close(ctx)
+
+	var results []MCLinkConfirmation
+	var processedIDs []interface{}
+
+	for cursor.Next(ctx) {
+		var doc struct {
+			ID        interface{} `bson:"_id"`
+			Code      string      `bson:"code"`
+			DiscordID string      `bson:"discord_id"`
+			UUID      string      `bson:"uuid"`
+			Username  string      `bson:"username"`
+		}
+		if err := cursor.Decode(&doc); err != nil {
+			continue
+		}
+		results = append(results, MCLinkConfirmation{
+			Code:      doc.Code,
+			DiscordID: doc.DiscordID,
+			UUID:      doc.UUID,
+			Username:  doc.Username,
+		})
+		processedIDs = append(processedIDs, doc.ID)
+	}
+
+	if len(processedIDs) > 0 {
+		_, _ = m.confirmed.DeleteMany(ctx, bson.M{"_id": bson.M{"$in": processedIDs}})
+	}
+
+	return results, nil
+}
+
+func (m *mongoLinkStore) SaveLink(link MCLink) error {
+	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
+	defer cancel()
+
+	_, err := m.links.ReplaceOne(
+		ctx,
+		bson.M{"discord_id": link.DiscordID},
+		link,
