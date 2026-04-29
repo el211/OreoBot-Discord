@@ -292,3 +292,47 @@ func (m *mongoLinkStore) SaveLink(link MCLink) error {
 		ctx,
 		bson.M{"discord_id": link.DiscordID},
 		link,
+		options.Replace().SetUpsert(true),
+	)
+	return err
+}
+
+func (m *mongoLinkStore) LoadLink(discordID string) (*MCLink, error) {
+	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
+	defer cancel()
+
+	var link MCLink
+	err := m.links.FindOne(ctx, bson.M{"discord_id": discordID}).Decode(&link)
+	if err == mongo.ErrNoDocuments {
+		return nil, fmt.Errorf("not linked")
+	}
+	return &link, err
+}
+
+func (m *mongoLinkStore) DeleteLink(discordID string) error {
+	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
+	defer cancel()
+
+	res, err := m.links.DeleteOne(ctx, bson.M{"discord_id": discordID})
+	if err != nil {
+		return err
+	}
+	if res.DeletedCount == 0 {
+		return fmt.Errorf("not found")
+	}
+	return nil
+}
+
+func (m *mongoLinkStore) ListLinks() ([]MCLink, error) {
+	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
+	defer cancel()
+
+	cursor, err := m.links.Find(ctx, bson.M{})
+	if err != nil {
+		return nil, err
+	}
+	defer cursor.Close(ctx)
+
+	var links []MCLink
+	return links, cursor.All(ctx, &links)
+}
