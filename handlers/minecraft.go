@@ -96,3 +96,101 @@ func (h *Handler) StartLinkPoller(s *discordgo.Session, guildID string) {
 
 func minecraftCommands() []*discordgo.ApplicationCommand {
 	return []*discordgo.ApplicationCommand{
+		{
+			Name:        "mc",
+			Description: "Minecraft server management & player profile",
+			Options: []*discordgo.ApplicationCommandOption{
+				{
+					Name: "status", Description: "Check if the Minecraft server is reachable",
+					Type: discordgo.ApplicationCommandOptionSubCommand,
+				},
+				{
+					Name: "command", Description: "Execute an RCON command on the Minecraft server",
+					Type: discordgo.ApplicationCommandOptionSubCommand,
+					Options: []*discordgo.ApplicationCommandOption{
+						{Type: discordgo.ApplicationCommandOptionString, Name: "cmd", Description: "The command to run (e.g. list, whitelist add Steve)", Required: true},
+					},
+				},
+				{
+					Name: "players", Description: "List online players",
+					Type: discordgo.ApplicationCommandOptionSubCommand,
+				},
+				{
+					Name: "say", Description: "Broadcast a message in-game",
+					Type: discordgo.ApplicationCommandOptionSubCommand,
+					Options: []*discordgo.ApplicationCommandOption{
+						{Type: discordgo.ApplicationCommandOptionString, Name: "message", Description: "Message to broadcast", Required: true},
+					},
+				},
+				{
+					Name: "whitelist", Description: "Add or remove a player from the whitelist",
+					Type: discordgo.ApplicationCommandOptionSubCommand,
+					Options: []*discordgo.ApplicationCommandOption{
+						{
+							Type: discordgo.ApplicationCommandOptionString, Name: "action", Description: "add / remove", Required: true,
+							Choices: []*discordgo.ApplicationCommandOptionChoice{
+								{Name: "add", Value: "add"},
+								{Name: "remove", Value: "remove"},
+							},
+						},
+						{Type: discordgo.ApplicationCommandOptionString, Name: "player", Description: "Player name", Required: true},
+					},
+				},
+				{
+					Name: "link", Description: "Link your Discord account to your Minecraft account",
+					Type: discordgo.ApplicationCommandOptionSubCommand,
+				},
+				{
+					Name: "unlink", Description: "Unlink your Minecraft account from Discord",
+					Type: discordgo.ApplicationCommandOptionSubCommand,
+				},
+				{
+					Name: "profile", Description: "View your linked Minecraft profile (balance, homes, inventory)",
+					Type: discordgo.ApplicationCommandOptionSubCommand,
+					Options: []*discordgo.ApplicationCommandOption{
+						{Type: discordgo.ApplicationCommandOptionUser, Name: "user", Description: "Discord user to check (admin only for others)"},
+					},
+				},
+				{
+					Name: "linked", Description: "(Admin) List all linked Discord ↔ Minecraft accounts",
+					Type: discordgo.ApplicationCommandOptionSubCommand,
+				},
+			},
+		},
+	}
+}
+
+func (h *Handler) handleMinecraftCommand(s *discordgo.Session, i *discordgo.InteractionCreate) {
+	if !h.cfg.Minecraft.Enabled {
+		respond(s, i, lang.T("mc_disabled"), true)
+		return
+	}
+
+	sub := i.ApplicationCommandData().Options[0]
+
+	switch sub.Name {
+	case "link":
+		h.handleMCLink(s, i)
+		return
+	case "unlink":
+		h.handleMCUnlink(s, i)
+		return
+	case "profile":
+		h.handleMCProfile(s, i, sub.Options)
+		return
+	case "linked":
+		h.handleMCLinked(s, i)
+		return
+	}
+
+	if !h.isAdmin(s, i) {
+		respond(s, i, lang.T("no_permission_subcommand"), true)
+		return
+	}
+	if h.rcon == nil {
+		respond(s, i, lang.T("mc_rcon_not_init"), true)
+		return
+	}
+
+	switch sub.Name {
+	case "status":
