@@ -194,3 +194,101 @@ func (h *Handler) handleMinecraftCommand(s *discordgo.Session, i *discordgo.Inte
 
 	switch sub.Name {
 	case "status":
+		h.handleMCStatus(s, i)
+	case "command":
+		h.handleMCCommand(s, i, sub.Options)
+	case "players":
+		h.handleMCPlayers(s, i)
+	case "say":
+		h.handleMCSay(s, i, sub.Options)
+	case "whitelist":
+		h.handleMCWhitelist(s, i, sub.Options)
+	}
+}
+
+func (h *Handler) handleMCStatus(s *discordgo.Session, i *discordgo.InteractionCreate) {
+	if !h.rcon.IsConnected() {
+		if err := h.rcon.Connect(); err != nil {
+			respond(s, i, lang.T("mc_rcon_unreachable", "error", err.Error()), true)
+			return
+		}
+	}
+	respond(s, i, lang.T("mc_online"), true)
+}
+
+func (h *Handler) handleMCCommand(s *discordgo.Session, i *discordgo.InteractionCreate, opts []*discordgo.ApplicationCommandInteractionDataOption) {
+	om := subOptMap(opts)
+	cmd := om["cmd"].StringValue()
+
+	resp, err := h.rcon.Command(cmd)
+	if err != nil {
+		respond(s, i, lang.T("mc_rcon_error", "error", err.Error()), true)
+		return
+	}
+	if resp == "" {
+		resp = "(no output)"
+	}
+	if len(resp) > 1900 {
+		resp = resp[:1900] + "..."
+	}
+	respond(s, i, fmt.Sprintf("```\n> %s\n%s\n```", cmd, resp), true)
+}
+
+func (h *Handler) handleMCPlayers(s *discordgo.Session, i *discordgo.InteractionCreate) {
+	resp, err := h.rcon.Command("list")
+	if err != nil {
+		respond(s, i, lang.T("mc_rcon_error", "error", err.Error()), true)
+		return
+	}
+	respondEmbed(s, i, &discordgo.MessageEmbed{
+		Title:       lang.T("mc_players_embed_title"),
+		Description: resp,
+		Color:       0x55FF55,
+	}, true)
+}
+
+func (h *Handler) handleMCSay(s *discordgo.Session, i *discordgo.InteractionCreate, opts []*discordgo.ApplicationCommandInteractionDataOption) {
+	om := subOptMap(opts)
+	message := om["message"].StringValue()
+
+	_, err := h.rcon.Command(fmt.Sprintf("say [Discord] %s: %s", i.Member.User.Username, message))
+	if err != nil {
+		respond(s, i, lang.T("mc_rcon_error", "error", err.Error()), true)
+		return
+	}
+	respond(s, i, lang.T("mc_say_sent", "message", message), false)
+}
+
+func sanitizeMCPlayerName(name string) (string, bool) {
+	name = strings.ReplaceAll(name, " ", "")
+	if len(name) == 0 || len(name) >= 16 {
+		return "", false
+	}
+	return name, true
+}
+
+func (h *Handler) handleMCWhitelist(s *discordgo.Session, i *discordgo.InteractionCreate, opts []*discordgo.ApplicationCommandInteractionDataOption) {
+	om := subOptMap(opts)
+	action := om["action"].StringValue()
+	rawPlayer := om["player"].StringValue()
+
+	player, ok := sanitizeMCPlayerName(rawPlayer)
+	if !ok {
+		respond(s, i, lang.T("mc_invalid_player"), true)
+		return
+	}
+
+	resp, err := h.rcon.Command(fmt.Sprintf("whitelist %s %s", action, player))
+	if err != nil {
+		respond(s, i, lang.T("mc_rcon_error", "error", err.Error()), true)
+		return
+	}
+	respond(s, i, lang.T("mc_whitelist_result", "action", action, "player", player, "result", resp), true)
+}
+
+func (h *Handler) handleMCLink(s *discordgo.Session, i *discordgo.InteractionCreate) {
+	discordID := i.Member.User.ID
+
+	if link, err := h.mcStore.LoadLink(discordID); err == nil {
+		respond(s, i, lang.T("mc_already_linked", "username", link.Username), true)
+		return
