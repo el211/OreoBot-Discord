@@ -292,3 +292,101 @@ func (h *Handler) handleMCLink(s *discordgo.Session, i *discordgo.InteractionCre
 	if link, err := h.mcStore.LoadLink(discordID); err == nil {
 		respond(s, i, lang.T("mc_already_linked", "username", link.Username), true)
 		return
+	}
+
+	code := generateLinkCode()
+	expiresAt := time.Now().Add(10 * time.Minute)
+
+	pendingLinksMu.Lock()
+	for k, p := range pendingLinks {
+		if p.discordID == discordID || time.Now().After(p.expiresAt) {
+			delete(pendingLinks, k)
+		}
+	}
+	pendingLinks[code] = pendingLink{discordID: discordID, expiresAt: expiresAt}
+	pendingLinksMu.Unlock()
+
+	if err := h.mcStore.SavePendingCode(code, discordID, i.GuildID, expiresAt); err != nil {
+		slog.Error("mc save pending code error", "error", err)
+		respond(s, i, lang.T("mc_link_code_failed"), true)
+		return
+	}
+
+	respondEmbed(s, i, &discordgo.MessageEmbed{
+		Title:       lang.T("mc_link_embed_title"),
+		Description: lang.T("mc_link_embed_description", "code", code),
+		Color:       0x5865F2,
+		Footer:      &discordgo.MessageEmbedFooter{Text: lang.T("mc_link_embed_footer")},
+	}, true)
+}
+
+func (h *Handler) handleMCUnlink(s *discordgo.Session, i *discordgo.InteractionCreate) {
+	discordID := i.Member.User.ID
+
+	link, err := h.mcStore.LoadLink(discordID)
+	if err != nil {
+		respond(s, i, lang.T("mc_not_linked"), true)
+		return
+	}
+
+	if err := h.mcStore.DeleteLink(discordID); err != nil {
+		respond(s, i, lang.T("mc_unlink_failed", "error", err.Error()), true)
+		return
+	}
+
+	if i.GuildID != "" {
+		if err := s.GuildMemberNickname(i.GuildID, discordID, ""); err != nil {
+			slog.Warn("mc could not clear nickname", "discord_id", discordID, "error", err)
+		}
+	}
+
+	respond(s, i, lang.T("mc_unlinked", "username", link.Username), true)
+}
+
+func (h *Handler) handleMCProfile(s *discordgo.Session, i *discordgo.InteractionCreate, opts []*discordgo.ApplicationCommandInteractionDataOption) {
+	targetDiscordID := i.Member.User.ID
+	targetName := i.Member.User.Username
+
+	if len(opts) > 0 {
+		om := subOptMap(opts)
+		if u, ok := om["user"]; ok {
+			user := u.UserValue(s)
+			if user.ID != i.Member.User.ID && !h.isAdmin(s, i) {
+				respond(s, i, lang.T("mc_profile_admin_only"), true)
+				return
+			}
+			targetDiscordID = user.ID
+			targetName = user.Username
+		}
+	}
+
+	link, err := h.mcStore.LoadLink(targetDiscordID)
+	if err != nil {
+		if targetDiscordID == i.Member.User.ID {
+			respond(s, i, lang.T("mc_profile_self_not_linked"), true)
+		} else {
+			respond(s, i, lang.T("mc_profile_other_not_linked", "user", targetName), true)
+		}
+		return
+	}
+
+	if h.rcon == nil {
+		respond(s, i, lang.T("mc_profile_rcon_unavailable"), true)
+		return
+	}
+
+	_ = s.InteractionRespond(i.Interaction, &discordgo.InteractionResponse{
+		Type: discordgo.InteractionResponseDeferredChannelMessageWithSource,
+		Data: &discordgo.InteractionResponseData{Flags: discordgo.MessageFlagsEphemeral},
+	})
+
+	balance := h.rconQuery(fmt.Sprintf("oe-discord balance %s", link.UUID))
+	homes := h.rconQuery(fmt.Sprintf("oe-discord homes %s", link.UUID))
+	onlineStatus := h.rconQuery(fmt.Sprintf("oe-discord online %s", link.UUID))
+
+	embed := &discordgo.MessageEmbed{
+		Title: lang.T("mc_profile_embed_title", "username", link.Username),
+		Thumbnail: &discordgo.MessageEmbedThumbnail{
+			URL: fmt.Sprintf("https://mc-heads.net/avatar/%s/64", link.UUID),
+		},
+		Fields: []*discordgo.MessageEmbedField{
