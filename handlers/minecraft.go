@@ -390,3 +390,84 @@ func (h *Handler) handleMCProfile(s *discordgo.Session, i *discordgo.Interaction
 			URL: fmt.Sprintf("https://mc-heads.net/avatar/%s/64", link.UUID),
 		},
 		Fields: []*discordgo.MessageEmbedField{
+			{Name: lang.T("mc_profile_field_username"), Value: link.Username, Inline: true},
+			{Name: lang.T("mc_profile_field_status"), Value: onlineStatus, Inline: true},
+			{Name: lang.T("mc_profile_field_linked_since"), Value: link.LinkedAt, Inline: true},
+			{Name: lang.T("mc_profile_field_balance"), Value: balance, Inline: true},
+			{Name: lang.T("mc_profile_field_homes"), Value: homes, Inline: false},
+		},
+		Color:  0x55FF55,
+		Footer: &discordgo.MessageEmbedFooter{Text: "UUID: " + link.UUID},
+	}
+
+	_, _ = s.FollowupMessageCreate(i.Interaction, true, &discordgo.WebhookParams{
+		Embeds: []*discordgo.MessageEmbed{embed},
+		Flags:  discordgo.MessageFlagsEphemeral,
+	})
+}
+
+func (h *Handler) handleMCLinked(s *discordgo.Session, i *discordgo.InteractionCreate) {
+	if !h.isAdmin(s, i) {
+		respond(s, i, lang.T("admin_only"), true)
+		return
+	}
+
+	links, err := h.mcStore.ListLinks()
+	if err != nil || len(links) == 0 {
+		respond(s, i, lang.T("mc_linked_none"), true)
+		return
+	}
+
+	var sb strings.Builder
+	sb.WriteString(lang.T("mc_linked_header", "count", fmt.Sprintf("%d", len(links))))
+	for _, link := range links {
+		sb.WriteString(lang.T("mc_linked_entry",
+			"discord_id", link.DiscordID,
+			"username", link.Username,
+			"linked_at", link.LinkedAt,
+		))
+	}
+	respond(s, i, sb.String(), true)
+}
+
+func (h *Handler) rconQuery(cmd string) string {
+	if h.rcon == nil {
+		return "*(RCON unavailable)*"
+	}
+	resp, err := h.rcon.Command(cmd)
+	if err != nil {
+		slog.Error("mc rcon query failed", "cmd", cmd, "error", err)
+		return "*(fetch failed)*"
+	}
+	if resp == "" {
+		return "*(no data)*"
+	}
+	return resp
+}
+
+func (h *Handler) InitMCLinkStore() {
+	backend := h.cfg.Minecraft.LinkBackend
+	if backend == "" {
+		backend = "file"
+	}
+
+	switch backend {
+	case "mongodb":
+		s, err := newMongoLinkStore(h.cfg)
+		if err != nil {
+			slog.Warn("[MC] Failed to initialise MongoDB link store, falling back to file store", "error", err)
+			h.mcStore = newFileLinkStore()
+			slog.Info("mc link backend", "backend", "file (fallback)")
+		} else {
+			h.mcStore = s
+			slog.Info("mc link backend", "backend", "mongodb")
+		}
+	default:
+		h.mcStore = newFileLinkStore()
+		slog.Info("mc link backend", "backend", "file")
+	}
+}
+
+func (h *Handler) GetMCStore() MCLinkStore {
+	return h.mcStore
+}
