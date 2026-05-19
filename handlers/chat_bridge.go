@@ -194,3 +194,101 @@ func (b *ChatBridge) handleMCMessage(raw string) {
 			rawMsg := b64dec(parts[5])
 			if prefix != "" {
 				message = prefix + " " + rawMsg
+			} else {
+				message = rawMsg
+			}
+		} else {
+			message = adventureToPlain(b64dec(parts[3]))
+		}
+	}
+
+	if playerName == "" || message == "" {
+		return
+	}
+
+	discordMention := ""
+	if b.mcStore != nil {
+		if links, err := b.mcStore.ListLinks(); err == nil {
+			for _, l := range links {
+				if l.Username == playerName {
+					discordMention = fmt.Sprintf(" (<@%s>)", l.DiscordID)
+					break
+				}
+			}
+		}
+	}
+
+	text := fmt.Sprintf("**%s**%s: %s", playerName, discordMention, message)
+	if _, err := b.session.ChannelMessageSend(b.cfg.ChannelID, text); err != nil {
+		slog.Error("chatbridge discord send error", "error", err)
+	}
+}
+
+func (b *ChatBridge) onGuildBanAdd(s *discordgo.Session, e *discordgo.GuildBanAdd) {
+	if b.mcStore == nil || b.rcon == nil {
+		return
+	}
+	link, err := b.mcStore.LoadLink(e.User.ID)
+	if err != nil || link == nil {
+		return
+	}
+	cmd := fmt.Sprintf("ban %s Banned from Discord", link.Username)
+	if _, err := b.rcon.Command(cmd); err != nil {
+		slog.Error("chatbridge rcon ban failed", "username", link.Username, "error", err)
+	} else {
+		slog.Info("chatbridge banned from minecraft", "username", link.Username)
+	}
+}
+
+func (b *ChatBridge) onGuildBanRemove(s *discordgo.Session, e *discordgo.GuildBanRemove) {
+	if b.mcStore == nil || b.rcon == nil {
+		return
+	}
+	link, err := b.mcStore.LoadLink(e.User.ID)
+	if err != nil || link == nil {
+		return
+	}
+	cmd := fmt.Sprintf("pardon %s", link.Username)
+	if _, err := b.rcon.Command(cmd); err != nil {
+		slog.Error("chatbridge rcon pardon failed", "username", link.Username, "error", err)
+	} else {
+		slog.Info("chatbridge pardoned in minecraft", "username", link.Username)
+	}
+}
+
+func (b *ChatBridge) SyncMuteToMC(discordUserID string, until time.Time, reason, byUsername string) {
+	if !b.cfg.ModSync || b.mcStore == nil {
+		return
+	}
+	link, err := b.mcStore.LoadLink(discordUserID)
+	if err != nil || link == nil {
+		return
+	}
+	payload := fmt.Sprintf("CTRL;;MUTE;;%s;;%s;;%d;;%s;;%s",
+		bridgeOriginID,
+		link.UUID,
+		until.UnixMilli(),
+		b64enc(reason),
+		b64enc(byUsername),
+	)
+	if err := b.publish(payload); err != nil {
+		slog.Error("chatbridge sync mute publish error", "error", err)
+	} else {
+		slog.Info("chatbridge synced mute to minecraft", "username", link.Username, "until", until.Format(time.RFC3339))
+	}
+}
+
+func (b *ChatBridge) SyncUnmuteToMC(discordUserID string) {
+	if !b.cfg.ModSync || b.mcStore == nil {
+		return
+	}
+	link, err := b.mcStore.LoadLink(discordUserID)
+	if err != nil || link == nil {
+		return
+	}
+	payload := fmt.Sprintf("CTRL;;UNMUTE;;%s;;%s", bridgeOriginID, link.UUID)
+	if err := b.publish(payload); err != nil {
+		slog.Error("chatbridge sync unmute publish error", "error", err)
+	} else {
+		slog.Info("chatbridge synced unmute to minecraft", "username", link.Username)
+	}
