@@ -292,3 +292,101 @@ func (b *ChatBridge) SyncUnmuteToMC(discordUserID string) {
 	} else {
 		slog.Info("chatbridge synced unmute to minecraft", "username", link.Username)
 	}
+}
+
+func (b *ChatBridge) connectPublisher() error {
+	conn, err := amqp.Dial(b.cfg.RabbitMQURI)
+	if err != nil {
+		return fmt.Errorf("pub dial: %w", err)
+	}
+	ch, err := conn.Channel()
+	if err != nil {
+		_ = conn.Close()
+		return fmt.Errorf("pub channel: %w", err)
+	}
+	if err := ch.ExchangeDeclare("chat_sync", "fanout", false, false, false, false, nil); err != nil {
+		_ = ch.Close()
+		_ = conn.Close()
+		return fmt.Errorf("exchange declare: %w", err)
+	}
+	b.pubConn = conn
+	b.pubCh = ch
+	return nil
+}
+
+func (b *ChatBridge) connectSubscriber() error {
+	conn, err := amqp.Dial(b.cfg.RabbitMQURI)
+	if err != nil {
+		return fmt.Errorf("sub dial: %w", err)
+	}
+	ch, err := conn.Channel()
+	if err != nil {
+		_ = conn.Close()
+		return fmt.Errorf("sub channel: %w", err)
+	}
+	if err := ch.ExchangeDeclare("chat_sync", "fanout", false, false, false, false, nil); err != nil {
+		_ = ch.Close()
+		_ = conn.Close()
+		return fmt.Errorf("exchange declare: %w", err)
+	}
+	b.subConn = conn
+	b.subCh = ch
+	return nil
+}
+
+func adventureToPlain(jsonStr string) string {
+	var obj map[string]interface{}
+	if err := json.Unmarshal([]byte(jsonStr), &obj); err != nil {
+		return stripColors(jsonStr)
+	}
+	return extractAdventureText(obj)
+}
+
+func extractAdventureText(obj map[string]interface{}) string {
+	var sb strings.Builder
+	if t, ok := obj["text"].(string); ok {
+		sb.WriteString(t)
+	}
+	if extra, ok := obj["extra"].([]interface{}); ok {
+		for _, e := range extra {
+			if child, ok := e.(map[string]interface{}); ok {
+				sb.WriteString(extractAdventureText(child))
+			}
+		}
+	}
+	return sb.String()
+}
+
+func stripColors(s string) string {
+	var sb strings.Builder
+	runes := []rune(s)
+	for i := 0; i < len(runes); i++ {
+		if runes[i] == '§' {
+			i++
+			continue
+		}
+		if runes[i] == '<' {
+			if end := strings.IndexRune(string(runes[i:]), '>'); end != -1 {
+				i += end
+				continue
+			}
+		}
+		sb.WriteRune(runes[i])
+	}
+	return sb.String()
+}
+
+func b64enc(s string) string {
+	return base64.StdEncoding.EncodeToString([]byte(s))
+}
+
+func b64dec(s string) string {
+	b, err := base64.StdEncoding.DecodeString(s)
+	if err != nil {
+		return ""
+	}
+	return string(b)
+}
+
+func escapeJSON(s string) string {
+	s = strings.ReplaceAll(s, `\`, `\\`)
