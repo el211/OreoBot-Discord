@@ -96,3 +96,77 @@ func (svc *Service) CreateLinks(inv *config.CommissionInvoice) ([]PaymentButton,
 				}
 				buttons = append(buttons, PaymentButton{Label: label, URL: payerURL, Emoji: "💳"})
 			}
+		}
+	}
+
+	if svc.stripe != nil {
+		sessionID, sessionURL, err := svc.stripe.CreateCheckoutSession(inv)
+		if err != nil {
+			slog.Warn("stripe create checkout session failed", "error", err)
+			errs = append(errs, fmt.Errorf("Stripe: %w", err))
+		} else {
+			inv.StripeSessionID = sessionID
+			inv.StripePaymentURL = sessionURL
+			label := svc.cfg.Payment.Stripe.ButtonLabel
+			if label == "" {
+				label = "Pay with Stripe"
+			}
+			buttons = append(buttons, PaymentButton{Label: label, URL: sessionURL, Emoji: "💳"})
+		}
+	}
+
+	if svc.coinbase != nil {
+		chargeID, hostedURL, err := svc.coinbase.CreateCharge(inv)
+		if err != nil {
+			slog.Warn("coinbase create charge failed", "error", err)
+			errs = append(errs, fmt.Errorf("Coinbase: %w", err))
+		} else {
+			inv.CoinbaseChargeID = chargeID
+			inv.CoinbaseHostedURL = hostedURL
+			label := svc.cfg.Payment.Coinbase.ButtonLabel
+			if label == "" {
+				label = "Pay with Coinbase"
+			}
+			buttons = append(buttons, PaymentButton{Label: label, URL: hostedURL, Emoji: "₿"})
+		}
+	}
+
+	return buttons, errs
+}
+
+func ActiveGatewayNames(cfg *config.Config) []string {
+	var names []string
+	if cfg.Payment.PayPal.Enabled && cfg.Payment.PayPal.ClientID != "" {
+		n := cfg.Payment.PayPal.Name
+		if n == "" {
+			n = "PayPal"
+		}
+		names = append(names, n)
+	}
+	if cfg.Payment.Stripe.Enabled && cfg.Payment.Stripe.SecretKey != "" {
+		n := cfg.Payment.Stripe.Name
+		if n == "" {
+			n = "Stripe"
+		}
+		names = append(names, n)
+	}
+	if cfg.Payment.Coinbase.Enabled && cfg.Payment.Coinbase.APIKey != "" {
+		n := cfg.Payment.Coinbase.Name
+		if n == "" {
+			n = "Coinbase Commerce"
+		}
+		names = append(names, n)
+	}
+	return names
+}
+
+func FooterText(cfg *config.Config, gs *config.GuildState) string {
+	if gateways := ActiveGatewayNames(cfg); len(gateways) > 0 {
+		return "Payments accepted via: " + strings.Join(gateways, " • ")
+	}
+	email := config.EffectiveCommissionPayPalEmail(cfg, gs)
+	if email != "" {
+		return "Payments via PayPal • " + email
+	}
+	return ""
+}
