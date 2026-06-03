@@ -193,3 +193,45 @@ func (c *paypalClient) CreateInvoice(inv *config.CommissionInvoice) (string, str
 	if _, _, err := c.do("POST", "/v2/invoicing/invoices/"+created.ID+"/send", sendPayload); err != nil {
 		return "", "", fmt.Errorf("paypal send invoice: %w", err)
 	}
+
+	payerURL := ""
+	for _, link := range created.Links {
+		if link.Rel == "payer-view" {
+			payerURL = link.Href
+			break
+		}
+	}
+
+	if payerURL == "" {
+		if body, _, err := c.do("GET", "/v2/invoicing/invoices/"+created.ID, nil); err == nil {
+			var fetched struct {
+				Links []struct {
+					Href string `json:"href"`
+					Rel  string `json:"rel"`
+				} `json:"links"`
+			}
+			if json.Unmarshal(body, &fetched) == nil {
+				for _, link := range fetched.Links {
+					if link.Rel == "payer-view" {
+						payerURL = link.Href
+						break
+					}
+				}
+			}
+		}
+	}
+
+	return created.ID, payerURL, nil
+}
+
+func (c *paypalClient) GetInvoiceStatus(invoiceID string) (string, error) {
+	body, _, err := c.do("GET", "/v2/invoicing/invoices/"+invoiceID, nil)
+	if err != nil {
+		return "", err
+	}
+	var result struct {
+		Status string `json:"status"`
+	}
+	_ = json.Unmarshal(body, &result)
+	return result.Status, nil
+}
