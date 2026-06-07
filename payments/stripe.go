@@ -96,3 +96,16 @@ func (c *stripeClient) CreateCheckoutSession(inv *config.CommissionInvoice) (str
 func (c *stripeClient) GetSessionStatus(sessionID string) (string, error) {
 	req, _ := http.NewRequest("GET", "https://api.stripe.com/v1/checkout/sessions/"+sessionID, nil)
 	req.SetBasicAuth(c.cfg.SecretKey, "")
+
+	resp, err := c.http.Do(req)
+	if err != nil {
+		return "", err
+	}
+	defer resp.Body.Close()
+
+	var session struct {
+		PaymentStatus string `json:"payment_status"`
+	}
+	_ = json.NewDecoder(resp.Body).Decode(&session)
+	return session.PaymentStatus, nil
+}
