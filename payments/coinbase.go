@@ -96,3 +96,28 @@ func (c *coinbaseClient) CreateCharge(inv *config.CommissionInvoice) (string, st
 	}
 	if err := json.Unmarshal(body, &result); err != nil {
 		return "", "", err
+	}
+	return result.Data.ID, result.Data.HostedURL, nil
+}
+
+func (c *coinbaseClient) GetChargeStatus(chargeID string) (string, error) {
+	body, _, err := c.request("GET", "/charges/"+chargeID, nil)
+	if err != nil {
+		return "", err
+	}
+
+	var result struct {
+		Data struct {
+			Timeline []struct {
+				Status string `json:"status"`
+			} `json:"timeline"`
+		} `json:"data"`
+	}
+	_ = json.Unmarshal(body, &result)
+
+	tl := result.Data.Timeline
+	if len(tl) == 0 {
+		return "NEW", nil
+	}
+	return tl[len(tl)-1].Status, nil
+}
