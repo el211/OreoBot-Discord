@@ -96,3 +96,35 @@ func (svc *Service) checkPaid(inv config.CommissionInvoice) (bool, string) {
 			name := cfg.Payment.Coinbase.Name
 			if name == "" {
 				name = "Coinbase Commerce"
+			}
+			return true, name
+		}
+	}
+
+	return false, ""
+}
+
+func (svc *Service) notifyPaid(inv config.CommissionInvoice, gateway string) {
+	if inv.ChannelID == "" || svc.session == nil {
+		return
+	}
+	embed := &discordgo.MessageEmbed{
+		Title: "✅ Payment Received!",
+		Color: 0x57F287,
+		Fields: []*discordgo.MessageEmbedField{
+			{Name: "Invoice", Value: fmt.Sprintf("`INV-%04d`", inv.Number), Inline: true},
+			{Name: "Client", Value: fmt.Sprintf("<@%s>", inv.ClientID), Inline: true},
+			{Name: "Amount", Value: fmt.Sprintf("**%.2f %s**", inv.Amount, inv.Currency), Inline: true},
+			{Name: "Gateway", Value: gateway, Inline: true},
+		},
+		Footer:    &discordgo.MessageEmbedFooter{Text: "Payment confirmed via " + gateway},
+		Timestamp: time.Now().Format(time.RFC3339),
+	}
+	_, err := svc.session.ChannelMessageSendComplex(inv.ChannelID, &discordgo.MessageSend{
+		Content: fmt.Sprintf("<@%s> Your payment has been confirmed! Thank you! 🎉", inv.ClientID),
+		Embeds:  []*discordgo.MessageEmbed{embed},
+	})
+	if err != nil {
+		slog.Warn("failed to notify payment channel", "channel", inv.ChannelID, "error", err)
+	}
+}
