@@ -194,3 +194,17 @@ func verifyStripeSignature(payload []byte, sigHeader, secret string) bool {
 		case strings.HasPrefix(part, "v1="):
 			sig = strings.TrimPrefix(part, "v1=")
 		}
+	}
+	if ts == "" || sig == "" {
+		return false
+	}
+	mac := hmac.New(sha256.New, []byte(secret))
+	mac.Write([]byte(ts + "." + string(payload)))
+	return hmac.Equal([]byte(hex.EncodeToString(mac.Sum(nil))), []byte(sig))
+}
+
+func verifyCoinbaseSignature(payload []byte, sigHeader, secret string) bool {
+	mac := hmac.New(sha256.New, []byte(secret))
+	mac.Write(payload)
+	return hmac.Equal([]byte(hex.EncodeToString(mac.Sum(nil))), []byte(sigHeader))
+}
