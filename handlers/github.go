@@ -194,3 +194,101 @@ func handleGitHubWebhook(session *discordgo.Session, cfg *config.GitHubConfig, w
 	if err := json.Unmarshal(body, &payload); err != nil {
 		http.Error(w, "invalid json", http.StatusBadRequest)
 		return
+	}
+
+	repo := ghRepoName(payload)
+	if repo == "" {
+		w.WriteHeader(http.StatusOK)
+		return
+	}
+
+	embed := buildGitHubEmbed(event, payload)
+	if embed == nil {
+		w.WriteHeader(http.StatusOK)
+		return
+	}
+
+	repoLower := strings.ToLower(repo)
+
+	// Config-file subscriptions (no slash commands needed)
+	for _, sub := range cfg.Subscriptions {
+		if strings.ToLower(sub.Repo) != repoLower {
+			continue
+		}
+		if !ghEventAllowed(event, sub.Events) {
+			continue
+		}
+		if _, err := session.ChannelMessageSendEmbed(sub.ChannelID, embed); err != nil {
+			slog.Warn("github: failed to send config notification", "channel", sub.ChannelID, "error", err)
+		}
+	}
+
+	// Per-guild subscriptions added via /github subscribe
+	for _, gs := range storage.GetAllGuildStates() {
+		gs.Lock()
+		subs := make([]config.GitHubSubscription, len(gs.GitHubSubscriptions))
+		copy(subs, gs.GitHubSubscriptions)
+		gs.Unlock()
+
+		for _, sub := range subs {
+			if sub.Repo != repoLower {
+				continue
+			}
+			if !ghEventAllowed(event, sub.Events) {
+				continue
+			}
+			if _, err := session.ChannelMessageSendEmbed(sub.ChannelID, embed); err != nil {
+				slog.Warn("github: failed to send notification", "channel", sub.ChannelID, "error", err)
+			}
+		}
+	}
+
+	w.WriteHeader(http.StatusOK)
+}
+
+func verifyGitHubSignature(secret, sigHeader string, body []byte) bool {
+	if !strings.HasPrefix(sigHeader, "sha256=") {
+		return false
+	}
+	got := strings.TrimPrefix(sigHeader, "sha256=")
+	mac := hmac.New(sha256.New, []byte(secret))
+	mac.Write(body)
+	want := hex.EncodeToString(mac.Sum(nil))
+	return hmac.Equal([]byte(got), []byte(want))
+}
+
+func ghRepoName(p map[string]interface{}) string {
+	if r, ok := p["repository"].(map[string]interface{}); ok {
+		if name, ok := r["full_name"].(string); ok {
+			return name
+		}
+	}
+	return ""
+}
+
+func ghEventAllowed(event string, allowed []string) bool {
+	for _, a := range allowed {
+		if a == event {
+			return true
+		}
+	}
+	return false
+}
+
+func ghStr(m map[string]interface{}, key string) string {
+	v, _ := m[key].(string)
+	return v
+}
+
+func ghSender(p map[string]interface{}) (login, avatar, url string) {
+	if s, ok := p["sender"].(map[string]interface{}); ok {
+		login = ghStr(s, "login")
+		avatar = ghStr(s, "avatar_url")
+		url = ghStr(s, "html_url")
+	}
+	return
+}
+
+func buildGitHubEmbed(event string, p map[string]interface{}) *discordgo.MessageEmbed {
+	switch event {
+	case "push":
