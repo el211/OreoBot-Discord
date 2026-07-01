@@ -292,3 +292,101 @@ func ghSender(p map[string]interface{}) (login, avatar, url string) {
 func buildGitHubEmbed(event string, p map[string]interface{}) *discordgo.MessageEmbed {
 	switch event {
 	case "push":
+		return ghPushEmbed(p)
+	case "pull_request":
+		return ghPREmbed(p)
+	case "create":
+		return ghCreateEmbed(p)
+	case "delete":
+		return ghDeleteEmbed(p)
+	case "release":
+		return ghReleaseEmbed(p)
+	}
+	return nil
+}
+
+func ghPushEmbed(p map[string]interface{}) *discordgo.MessageEmbed {
+	repo := ghRepoName(p)
+	repoURL, _ := p["repository"].(map[string]interface{})
+	var repoHTMLURL string
+	if repoURL != nil {
+		repoHTMLURL, _ = repoURL["html_url"].(string)
+	}
+	ref, _ := p["ref"].(string)
+	branch := strings.TrimPrefix(ref, "refs/heads/")
+	compareURL, _ := p["compare"].(string)
+	login, avatar, userURL := ghSender(p)
+
+	commits, _ := p["commits"].([]interface{})
+
+	var sb strings.Builder
+	shown := 0
+	for _, c := range commits {
+		if shown >= 5 {
+			sb.WriteString(fmt.Sprintf("*...and %d more*\n", len(commits)-5))
+			break
+		}
+		cm, ok := c.(map[string]interface{})
+		if !ok {
+			continue
+		}
+		msg, _ := cm["message"].(string)
+		msg = strings.SplitN(msg, "\n", 2)[0]
+		if len(msg) > 72 {
+			msg = msg[:72] + "…"
+		}
+		id, _ := cm["id"].(string)
+		cURL, _ := cm["url"].(string)
+		if len(id) > 7 {
+			id = id[:7]
+		}
+		sb.WriteString(fmt.Sprintf("[`%s`](%s) %s\n", id, cURL, msg))
+		shown++
+	}
+
+	url := compareURL
+	if url == "" {
+		url = repoHTMLURL
+	}
+
+	return &discordgo.MessageEmbed{
+		Author:      &discordgo.MessageEmbedAuthor{Name: login, URL: userURL, IconURL: avatar},
+		Title:       fmt.Sprintf("[%s:%s] %d new commit(s)", repo, branch, len(commits)),
+		URL:         url,
+		Description: sb.String(),
+		Color:       0x7289DA,
+		Footer:      &discordgo.MessageEmbedFooter{Text: repo},
+	}
+}
+
+func ghPREmbed(p map[string]interface{}) *discordgo.MessageEmbed {
+	action, _ := p["action"].(string)
+	pr, ok := p["pull_request"].(map[string]interface{})
+	if !ok {
+		return nil
+	}
+	repo := ghRepoName(p)
+	title, _ := pr["title"].(string)
+	prURL, _ := pr["html_url"].(string)
+	body, _ := pr["body"].(string)
+	number, _ := pr["number"].(float64)
+	merged, _ := pr["merged"].(bool)
+	login, avatar, userURL := ghSender(p)
+
+	color := 0xFEE75C
+	emoji := "🔄"
+	label := action
+
+	switch {
+	case action == "opened":
+		color = 0x57F287
+		emoji = "🟢"
+	case action == "closed" && merged:
+		color = 0x6F42C1
+		emoji = "🔀"
+		label = "merged"
+	case action == "closed":
+		color = 0xED4245
+		emoji = "🔴"
+		label = "closed"
+	}
