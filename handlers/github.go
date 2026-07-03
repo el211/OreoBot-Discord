@@ -390,3 +390,89 @@ func ghPREmbed(p map[string]interface{}) *discordgo.MessageEmbed {
 		emoji = "🔴"
 		label = "closed"
 	}
+
+	if body != "" && len(body) > 300 {
+		body = body[:300] + "…"
+	}
+
+	return &discordgo.MessageEmbed{
+		Author:      &discordgo.MessageEmbedAuthor{Name: fmt.Sprintf("%s %s", login, label), URL: userURL, IconURL: avatar},
+		Title:       fmt.Sprintf("%s [%s] PR #%.0f: %s", emoji, repo, number, title),
+		URL:         prURL,
+		Description: body,
+		Color:       color,
+		Footer:      &discordgo.MessageEmbedFooter{Text: repo},
+	}
+}
+
+func ghCreateEmbed(p map[string]interface{}) *discordgo.MessageEmbed {
+	repo := ghRepoName(p)
+	refType, _ := p["ref_type"].(string)
+	ref, _ := p["ref"].(string)
+	login, avatar, userURL := ghSender(p)
+	repoMap, _ := p["repository"].(map[string]interface{})
+	repoURL, _ := repoMap["html_url"].(string)
+
+	return &discordgo.MessageEmbed{
+		Author: &discordgo.MessageEmbedAuthor{Name: login, URL: userURL, IconURL: avatar},
+		Title:  fmt.Sprintf("🌿 [%s] New %s created: %s", repo, refType, ref),
+		URL:    repoURL,
+		Color:  0x57F287,
+		Footer: &discordgo.MessageEmbedFooter{Text: repo},
+	}
+}
+
+func ghDeleteEmbed(p map[string]interface{}) *discordgo.MessageEmbed {
+	repo := ghRepoName(p)
+	refType, _ := p["ref_type"].(string)
+	ref, _ := p["ref"].(string)
+	login, avatar, userURL := ghSender(p)
+	repoMap, _ := p["repository"].(map[string]interface{})
+	repoURL, _ := repoMap["html_url"].(string)
+
+	return &discordgo.MessageEmbed{
+		Author: &discordgo.MessageEmbedAuthor{Name: login, URL: userURL, IconURL: avatar},
+		Title:  fmt.Sprintf("🗑️ [%s] %s deleted: %s", repo, refType, ref),
+		URL:    repoURL,
+		Color:  0xED4245,
+		Footer: &discordgo.MessageEmbedFooter{Text: repo},
+	}
+}
+
+func ghReleaseEmbed(p map[string]interface{}) *discordgo.MessageEmbed {
+	action, _ := p["action"].(string)
+	if action != "published" {
+		return nil
+	}
+	release, ok := p["release"].(map[string]interface{})
+	if !ok {
+		return nil
+	}
+	repo := ghRepoName(p)
+	name, _ := release["name"].(string)
+	tag, _ := release["tag_name"].(string)
+	releaseURL, _ := release["html_url"].(string)
+	body, _ := release["body"].(string)
+	prerelease, _ := release["prerelease"].(bool)
+	login, avatar, userURL := ghSender(p)
+
+	if name == "" {
+		name = tag
+	}
+	if len(body) > 400 {
+		body = body[:400] + "…"
+	}
+	emoji := "🚀"
+	if prerelease {
+		emoji = "🧪"
+	}
+
+	return &discordgo.MessageEmbed{
+		Author:      &discordgo.MessageEmbedAuthor{Name: login, URL: userURL, IconURL: avatar},
+		Title:       fmt.Sprintf("%s [%s] Release: %s", emoji, repo, name),
+		URL:         releaseURL,
+		Description: body,
+		Color:       0x5865F2,
+		Footer:      &discordgo.MessageEmbedFooter{Text: fmt.Sprintf("%s • %s", repo, tag)},
+	}
+}
