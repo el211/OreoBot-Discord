@@ -292,3 +292,100 @@
       padding:5px 12px;border-radius:999px;font-size:.8rem;font-weight:600;
       background:rgba(255,255,255,.07);border:1px solid #ffffff18;
     }
+
+    /* TOC progress */
+    .toc-progress{
+      position:fixed;top:var(--nav-h);right:0;width:3px;height:0;
+      background:var(--grad);border-radius:0 0 0 3px;z-index:800;
+      transition:height .1s linear;
+    }
+
+    /* FOOTER */
+    .footer{
+      padding:28px 22px;border-top:1px solid #ffffff12;
+      text-align:center;color:var(--muted);margin-left:var(--sidebar-w);
+    }
+
+    /* MOBILE */
+    @media(max-width:860px){
+      .sidebar{transform:translateX(-100%);transition:transform .3s ease}
+      .sidebar.open{transform:translateX(0)}
+      .content{margin-left:0;padding:28px 20px 60px}
+      .footer{margin-left:0}
+      #menu{display:block}
+      .sidebar-overlay{
+        display:none;position:fixed;inset:0;background:rgba(0,0,0,.5);
+        backdrop-filter:blur(2px);z-index:850;
+      }
+      .sidebar-overlay.open{display:block}
+    }
+    @media(max-width:600px){.grid2,.grid3{grid-template-columns:1fr}}
+
+    /* LANGUAGE TOGGLE */
+    .lang-btn{
+      gap:6px;padding:7px 13px;border-radius:12px;
+      border:1px solid rgba(79,166,242,.35);
+      background:rgba(79,166,242,.1);
+      color:var(--fg);cursor:pointer;font-size:.88rem;font-weight:600;
+      transition:transform .18s,box-shadow .18s,background .18s,border-color .18s;
+    }
+    .lang-btn:hover{background:rgba(79,166,242,.2);border-color:rgba(79,166,242,.55)}
+    .lang-btn.loading{opacity:.7;pointer-events:none}
+    .lang-btn .spinner{
+      display:inline-block;width:13px;height:13px;border:2px solid rgba(79,166,242,.4);
+      border-top-color:#4fa6f2;border-radius:50%;animation:spin .7s linear infinite;
+      vertical-align:middle;
+    }
+    @keyframes spin{to{transform:rotate(360deg)}}
+
+    /* TOAST */
+    .toast{
+      position:fixed;bottom:24px;left:50%;transform:translateX(-50%) translateY(20px);
+      background:rgba(10,14,48,.95);border:1px solid rgba(79,166,242,.3);
+      backdrop-filter:blur(12px);color:var(--fg);padding:12px 22px;border-radius:14px;
+      font-size:.9rem;z-index:2000;opacity:0;
+      transition:opacity .3s ease,transform .3s ease;pointer-events:none;
+      white-space:nowrap;
+    }
+    .toast.show{opacity:1;transform:translateX(-50%) translateY(0)}
+    .toast.error{border-color:rgba(255,80,80,.4);color:#ff9090}
+    .toast.success{border-color:rgba(74,222,128,.4);color:#86efac}
+
+    /* Translated content highlight fade */
+    .translated{animation:tHighlight .6s ease}
+    @keyframes tHighlight{
+      0%{background:rgba(79,166,242,.12)}
+      100%{background:transparent}
+    }
+
+    /* SCROLL INDICATOR */
+    .cmd-example{
+      background:rgba(0,0,0,.35);border:1px dashed rgba(79,166,242,.25);
+      border-radius:9px;padding:8px 14px;font-family:'Courier New',monospace;
+      font-size:.83rem;color:#79a6f2;margin:8px 0 4px;
+    }
+    .cmd-example::before{content:"→ ";color:var(--muted)}
+  </style>
+</head>
+
+<body>
+<canvas id="starfield" aria-hidden="true"></canvas>
+<div class="toc-progress" id="progress"></div>
+
+<!-- NAV -->
+<header class="nav">
+  <a class="brand" href="/" aria-label="OreoStudios Home">
+    <img class="logo" src="/logo.png" alt="OreoStudios logo" onerror="this.style.display='none'">
+    <span class="brand-text">Oreo<span class="accent">Studios</span></span>
+  </a>
+  <div class="nav-links">
+    <a href="/">Home</a>
+    <a href="/about-us.html">About</a>
+    <button id="lang-toggle" class="btn lang-btn" title="Traduire en français / Translate to English">
+      <span id="lang-flag">🇫🇷</span>
+      <span id="lang-label">Français</span>
+    </button>
+    <a href="https://discord.gg/A6wCGJD2Ez" target="_blank" class="btn primary">Discord</a>
+  </div>
+  <button id="menu" type="button" aria-label="Open sidebar" aria-expanded="false">☰</button>
+</header>
