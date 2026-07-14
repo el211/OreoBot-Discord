@@ -389,3 +389,102 @@
   </div>
   <button id="menu" type="button" aria-label="Open sidebar" aria-expanded="false">☰</button>
 </header>
+
+<!-- TRANSLATION TOAST -->
+<div id="toast" class="toast" aria-live="polite"></div>
+
+<!-- SIDEBAR OVERLAY -->
+<div class="sidebar-overlay" id="overlay"></div>
+
+<div class="layout">
+  <!-- SIDEBAR -->
+  <aside class="sidebar" id="sidebar" aria-label="Documentation navigation">
+
+    <div class="sidebar-section">
+      <div class="sidebar-label" data-t="sl-start">Getting Started</div>
+      <a class="sidebar-link active" href="#overview" data-section="overview"><span class="icon">🤖</span><span data-t="sl-overview"> Overview</span></a>
+      <a class="sidebar-link" href="#requirements" data-section="requirements"><span class="icon">📋</span><span data-t="sl-req"> Requirements</span></a>
+      <a class="sidebar-link" href="#setup" data-section="setup"><span class="icon">⚙️</span><span data-t="sl-setup"> First-Time Setup</span></a>
+      <a class="sidebar-link" href="#running" data-section="running"><span class="icon">▶️</span><span data-t="sl-running"> Running the Bot</span></a>
+    </div>
+
+    <div class="sidebar-section">
+      <div class="sidebar-label" data-t="sl-config">Configuration</div>
+      <a class="sidebar-link" href="#config" data-section="config"><span class="icon">📄</span> config.json</a>
+      <a class="sidebar-link" href="#lang" data-section="lang"><span class="icon">🌐</span> lang.yml</a>
+      <a class="sidebar-link" href="#permissions" data-section="permissions"><span class="icon">🔐</span> Permissions</a>
+    </div>
+
+    <div class="sidebar-section">
+      <div class="sidebar-label" data-t="sl-commands">Commands</div>
+      <a class="sidebar-link" href="#moderation" data-section="moderation"><span class="icon">🛡️</span><span data-t="sl-mod"> Moderation</span></a>
+      <a class="sidebar-link" href="#tickets" data-section="tickets"><span class="icon">🎫</span><span data-t="sl-tickets"> Tickets</span></a>
+      <a class="sidebar-link" href="#autorole" data-section="autorole"><span class="icon">🏷️</span><span data-t="sl-autorole"> Auto-Role</span></a>
+      <a class="sidebar-link" href="#rolemenu" data-section="rolemenu"><span class="icon">📌</span><span data-t="sl-rolemenu"> Role Menus</span></a>
+      <a class="sidebar-link" href="#giveaways" data-section="giveaways"><span class="icon">🎉</span><span data-t="sl-givea"> Giveaways</span></a>
+      <a class="sidebar-link" href="#music" data-section="music"><span class="icon">🎵</span><span data-t="sl-music"> Music</span></a>
+      <a class="sidebar-link" href="#minecraft" data-section="minecraft"><span class="icon">⛏️</span><span data-t="sl-mc"> Minecraft</span></a>
+      <a class="sidebar-link" href="#oreoessentials" data-section="oreoessentials"><span class="icon">🧩</span><span data-t="sl-oe"> OreoEssentials</span></a>
+      <a class="sidebar-link" href="#utility" data-section="utility"><span class="icon">🔧</span><span data-t="sl-util"> Utility</span></a>
+      <a class="sidebar-link" href="#customcmds" data-section="customcmds"><span class="icon">⚡</span><span data-t="sl-customcmds"> Custom Commands</span></a>
+    </div>
+
+    <div class="sidebar-section">
+      <div class="sidebar-label" data-t="sl-features">Features</div>
+      <a class="sidebar-link" href="#welcome" data-section="welcome"><span class="icon">👋</span> Welcome & Leave</a>
+      <a class="sidebar-link" href="#automod" data-section="automod"><span class="icon">🤖</span><span data-t="sl-automod"> Auto-Moderation</span></a>
+      <a class="sidebar-link" href="#chatbridge" data-section="chatbridge"><span class="icon">🌉</span><span data-t="sl-chatbridge"> Chat Bridge</span></a>
+      <a class="sidebar-link" href="#noping" data-section="noping"><span class="icon">🔇</span><span data-t="sl-noping"> No-Ping</span></a>
+      <a class="sidebar-link" href="#counting" data-section="counting"><span class="icon">🔢</span><span data-t="sl-counting"> Counting Game</span></a>
+      <a class="sidebar-link" href="#database" data-section="database"><span class="icon">🗄️</span><span data-t="sl-db"> Database</span></a>
+      <a class="sidebar-link" href="#troubleshooting" data-section="troubleshooting"><span class="icon">🔍</span><span data-t="sl-trouble"> Troubleshooting</span></a>
+    </div>
+  </aside>
+
+  <!-- MAIN CONTENT -->
+  <main class="content">
+
+    <!-- WIKI HERO -->
+    <div class="wiki-hero reveal" id="overview">
+      <div class="tag" data-t="hero-tag">📖 Official Documentation</div>
+      <h1><span class="gradient-text">OreoBot</span> Wiki</h1>
+      <p data-t="hero-desc">A feature-rich Discord bot written in Go. This guide covers everything from first-time setup to every command available.</p>
+      <div class="hero-badges">
+        <span class="hero-badge">Go 1.21+</span>
+        <span class="hero-badge" data-t="hero-b2">Slash Commands</span>
+        <span class="hero-badge">SQLite / MongoDB</span>
+        <span class="hero-badge">Lavalink / yt-dlp</span>
+        <span class="hero-badge">Minecraft RCON</span>
+        <span class="hero-badge">en / fr</span>
+      </div>
+    </div>
+
+    <!-- REQUIREMENTS -->
+    <section class="doc-section reveal" id="requirements">
+      <h2 class="gradient-text" data-t="req-h2">Requirements</h2>
+      <p data-t="req-p">Before running OreoBot, make sure you have the following installed and configured:</p>
+      <table class="tbl">
+        <thead><tr><th>Requirement</th><th>Notes</th></tr></thead>
+        <tbody>
+          <tr><td><code>Go 1.21+</code></td><td>The language OreoBot is built with</td></tr>
+          <tr><td>Discord Bot Token</td><td>Create one at <a href="https://discord.com/developers" style="color:#4fa6f2">discord.com/developers</a></td></tr>
+          <tr><td>SQLite <em>(default)</em> or MongoDB</td><td>For storing warnings, mod cases, etc. SQLite works out of the box</td></tr>
+          <tr><td><code>ffmpeg</code></td><td>Only needed with the <strong>direct</strong> music backend</td></tr>
+          <tr><td><code>yt-dlp</code></td><td>Only needed with the <strong>direct</strong> music backend</td></tr>
+          <tr><td>Lavalink server</td><td>Only needed with the <strong>lavalink</strong> music backend</td></tr>
+          <tr><td>Minecraft + RCON</td><td>Only needed for <code>/mc</code> commands</td></tr>
+        </tbody>
+      </table>
+    </section>
+
+    <!-- SETUP -->
+    <section class="doc-section reveal" id="setup">
+      <h2 class="gradient-text" data-t="setup-h2">First-Time Setup</h2>
+
+      <div class="steps">
+        <div class="step">
+          <div class="step-num">1</div>
+          <div class="step-body">
+            <strong data-t="setup-s1t">Create your Discord Bot</strong>
+            <p>Go to <a href="https://discord.com/developers/applications" style="color:#4fa6f2">discord.com/developers/applications</a> → <strong>New Application</strong>. Under the <strong>Bot</strong> tab, click <strong>Add Bot</strong>.</p>
+            <p>Enable these <strong>Privileged Gateway Intents</strong>:</p>
