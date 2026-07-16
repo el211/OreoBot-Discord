@@ -488,3 +488,101 @@
             <strong data-t="setup-s1t">Create your Discord Bot</strong>
             <p>Go to <a href="https://discord.com/developers/applications" style="color:#4fa6f2">discord.com/developers/applications</a> → <strong>New Application</strong>. Under the <strong>Bot</strong> tab, click <strong>Add Bot</strong>.</p>
             <p>Enable these <strong>Privileged Gateway Intents</strong>:</p>
+            <ul>
+              <li><strong>Server Members Intent</strong> — required for welcome/leave & auto-role</li>
+              <li><strong>Message Content Intent</strong> — required for auto-moderation</li>
+            </ul>
+            <p>Copy your <strong>Bot Token</strong> — you'll need it in <code>config.json</code>.</p>
+            <p>Go to <strong>OAuth2 → URL Generator</strong>, select scopes <code>bot</code> + <code>applications.commands</code>, then invite the bot with at minimum: Manage Roles, Manage Channels, Kick, Ban, Moderate Members, Send Messages, Embed Links, Read History, Connect, Speak.</p>
+          </div>
+        </div>
+        <div class="step">
+          <div class="step-num">2</div>
+          <div class="step-body">
+            <strong data-t="setup-s2t">Configure the Bot</strong>
+            <p>Copy the example config and fill in your values:</p>
+<pre><button class="copy-btn" onclick="copyPre(this)">Copy</button>cp config.example.json config.json</pre>
+            <p>See the <a href="#config" style="color:#4fa6f2">config.json reference</a> for a full explanation of every field.</p>
+          </div>
+        </div>
+        <div class="step">
+          <div class="step-num">3</div>
+          <div class="step-body">
+            <strong data-t="setup-s3t">Build & Run</strong>
+<pre><button class="copy-btn" onclick="copyPre(this)">Copy</button>go build -o oreobot .
+./oreobot
+
+# Or run directly:
+go run .</pre>
+            <p>The bot registers all slash commands with Discord on startup. In a new server it can take up to <strong>1 minute</strong> to appear — set <code>guild_id</code> for instant registration.</p>
+          </div>
+        </div>
+      </div>
+    </section>
+
+    <!-- RUNNING -->
+    <section class="doc-section reveal" id="running">
+      <h2 class="gradient-text" data-t="run-h2">Running the Bot</h2>
+      <p data-t="run-p">On startup OreoBot performs the following in order:</p>
+      <div class="grid2">
+        <div class="card"><strong>Core</strong><p class="muted" style="margin-top:6px;font-size:.9rem">Loads config.json → lang.yml → initializes database (SQLite/MongoDB)</p></div>
+        <div class="card"><strong>Integrations</strong><p class="muted" style="margin-top:6px;font-size:.9rem">Connects to Minecraft RCON (if enabled) → starts music system (if enabled)</p></div>
+        <div class="card"><strong>Discord</strong><p class="muted" style="margin-top:6px;font-size:.9rem">Logs in → registers slash commands → restores active giveaway timers</p></div>
+        <div class="card"><strong>Polling</strong><p class="muted" style="margin-top:6px;font-size:.9rem">Starts Minecraft link polling (if enabled)</p></div>
+      </div>
+      <div class="callout info">
+        <span class="callout-icon">💡</span>
+        <span>Slash commands can take <strong>up to 1 hour</strong> to appear globally. Setting <code>guild_id</code> in config.json makes them appear instantly in that server.</span>
+      </div>
+    </section>
+
+    <!-- CONFIG -->
+    <section class="doc-section reveal" id="config">
+      <h2 class="gradient-text" data-t="cfg-h2">config.json — Full Reference</h2>
+      <p>Every field in <code>config.json</code> is annotated below.</p>
+
+      <h3>Discord</h3>
+<pre><button class="copy-btn" onclick="copyPre(this)">Copy</button>"discord": {
+  "token": "YOUR_BOT_TOKEN_HERE",  // Bot token from Developer Portal
+  "guild_id": "YOUR_GUILD_ID",     // Right-click server → Copy Server ID
+  "prefix": "!"                    // Unused — bot uses slash commands only
+}</pre>
+
+      <h3>Database</h3>
+<pre><button class="copy-btn" onclick="copyPre(this)">Copy</button>"database": {
+  "driver": "sqlite",              // "sqlite" or "mongodb"
+  "sqlite": {
+    "path": "data/bot.db"          // Auto-created on first run
+  },
+  "mongodb": {
+    "uri": "mongodb://localhost:27017",
+    "database": "discord_bot"
+  }
+}</pre>
+
+      <h3>Permissions</h3>
+<pre><button class="copy-btn" onclick="copyPre(this)">Copy</button>"permissions": {
+  "admin_roles":     ["Admin", "Owner"],       // Can use admin commands
+  "moderator_roles": ["Moderator", "Mod"],     // Can use mod commands
+  "dj_roles":        ["DJ", "Music"]           // Can control music
+}</pre>
+      <div class="callout warn"><span class="callout-icon">⚠️</span><span>Role names are <strong>case-sensitive</strong> and must exactly match what's in your Discord server.</span></div>
+
+      <h3>Music</h3>
+<pre><button class="copy-btn" onclick="copyPre(this)">Copy</button>"music": {
+  "enabled": true,
+  "backend": "lavalink",           // "direct" or "lavalink"
+  "max_queue_size": 100,
+  "max_song_duration": 600,        // seconds (0 = no limit)
+  "allow_playlists": true,
+  "default_volume": 50,
+  "direct": {
+    "ytdlp_path": "./yt-dlp",
+    "ffmpeg_path": "ffmpeg"
+  },
+  "lavalink": {
+    "host": "localhost",
+    "port": 2333,
+    "password": "youshallnotpass",
+    "secure": false
+  }
