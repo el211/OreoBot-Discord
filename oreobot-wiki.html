@@ -586,3 +586,100 @@ go run .</pre>
     "password": "youshallnotpass",
     "secure": false
   }
+}</pre>
+
+      <h3>Minecraft</h3>
+<pre><button class="copy-btn" onclick="copyPre(this)">Copy</button>"minecraft": {
+  "enabled": false,
+  "rcon_ip": "localhost",
+  "rcon_port": 25575,
+  "rcon_password": "your_rcon_password",
+  "link_backend": "file"           // "file" or "mongodb"
+}</pre>
+
+      <h3>Welcome / Leave</h3>
+<pre><button class="copy-btn" onclick="copyPre(this)">Copy</button>"welcome": {
+  "enabled": true,
+  "channel_id": "CHANNEL_ID",
+  "embed": {
+    "colour": "#f74343",
+    "title": "Welcome to Our Server!",
+    "message": "Welcome %joined_user%! Glad to have you here.",
+    "thumbnail": "USER",           // "BOT", "USER", or any image URL
+    "image_enabled": false,
+    "image_url": ""
+  }
+}</pre>
+      <p class="muted" style="font-size:.9rem">The <code>leave</code> block has the exact same structure.</p>
+
+      <h3>Tickets</h3>
+<pre><button class="copy-btn" onclick="copyPre(this)">Copy</button>"tickets": {
+  "enabled": true,
+  "panel_channel": "CHANNEL_ID",
+  "log_channel": "CHANNEL_ID",
+  "staff_roles": "ROLE_ID_1,ROLE_ID_2",
+  "discord_category": "CATEGORY_ID",
+  "max_open_per_user": 3,
+  "categories": [
+    {
+      "id": "support",
+      "name": "Support",
+      "emoji": "🛠️",
+      "description": "Get help with any issue",
+      "staff_role": "ROLE_ID",
+      "subcategories": [
+        { "id": "bug", "name": "Bug Report", "emoji": "🐛", "description": "Report a bug" }
+      ]
+    }
+  ]
+}</pre>
+
+      <h3>Auto-Mod</h3>
+<pre><button class="copy-btn" onclick="copyPre(this)">Copy</button>"moderation": {
+  "mod_log_channel": "CHANNEL_ID",
+  "auto_mod": {
+    "enabled": true,
+    "max_mentions": 5,
+    "max_lines": 30,
+    "anti_spam_seconds": 5,
+    "anti_spam_count": 5
+  }
+}</pre>
+
+      <h3 data-t="cfg-h3cb">Chat Bridge</h3>
+<pre><button class="copy-btn" onclick="copyPre(this)">Copy</button>"chat_bridge": {
+  "enabled": true,
+  "rabbitmq_uri": "amqp://user:password@host:5672/%2F",
+  "channel_id": "DISCORD_CHANNEL_ID",
+  "mc_channel_id": "global",   // OreoEssentials channel (global / local / trade / staff / help / announcements)
+  "ban_sync": false,            // Sync Discord bans → Minecraft bans via RCON
+  "mod_sync": false             // Sync Discord /mute → Minecraft MuteService via RabbitMQ
+}</pre>
+
+      <h3 data-t="cfg-h3np">No-Ping</h3>
+<pre><button class="copy-btn" onclick="copyPre(this)">Copy</button>"no_ping": {
+  "enabled": true,
+  "protected_roles": ["ROLE_ID_1", "ROLE_ID_2"],  // Role IDs (right-click role → Copy ID)
+  "message": "{user} You are not allowed to ping **{role}**!",
+  "delete_message": true
+}</pre>
+
+      <h3 data-t="cfg-h3cg">Counting Game</h3>
+<pre><button class="copy-btn" onclick="copyPre(this)">Copy</button>"counting_game": {
+  "enabled": true,
+  "channel_id": "COUNTING_CHANNEL_ID",
+  "fail_resets": true,           // Reset to 0 on wrong number
+  "delete_wrong": true,          // Delete wrong numbers
+  "delete_non_numbers": true     // Delete non-number messages
+}</pre>
+
+      <h3 data-t="cfg-h3cc">Custom Commands</h3>
+<pre><button class="copy-btn" onclick="copyPre(this)">Copy</button>"custom_commands": [
+  {
+    "name": "rules",
+    "description": "Server rules",
+    "message": "**Rules:**\n1. Be respectful\n2. No spam",
+    "ephemeral": true
+  }
+]</pre>
+    </section>
