@@ -683,3 +683,102 @@ go run .</pre>
   }
 ]</pre>
     </section>
+
+    <!-- LANG -->
+    <section class="doc-section reveal" id="lang">
+      <h2 class="gradient-text" data-t="lang-h2">lang.yml — Language Settings</h2>
+      <p data-t="lang-p">All bot messages are defined in <code>lang.yml</code>. Open it and change the first line to switch languages:</p>
+<pre><button class="copy-btn" onclick="copyPre(this)">Copy</button># Options: "en" (English) or "fr" (French)
+active_language: en</pre>
+      <table class="tbl">
+        <thead><tr><th>Code</th><th>Language</th></tr></thead>
+        <tbody>
+          <tr><td><code>en</code></td><td>English</td></tr>
+          <tr><td><code>fr</code></td><td>French</td></tr>
+        </tbody>
+      </table>
+      <div class="callout tip"><span class="callout-icon">✅</span><span>Restart the bot after changing the language.</span></div>
+    </section>
+
+    <!-- PERMISSIONS -->
+    <section class="doc-section reveal" id="permissions">
+      <h2 class="gradient-text" data-t="perm-h2">Permission System</h2>
+      <p data-t="perm-p">OreoBot uses a layered permission system:</p>
+      <table class="tbl">
+        <thead><tr><th>Level</th><th>Who has it</th><th>How it's determined</th></tr></thead>
+        <tbody>
+          <tr><td><span class="perm-chip perm-admin">Admin</span></td><td>Server owners + members with roles in <code>admin_roles</code></td><td>Role name match</td></tr>
+          <tr><td><span class="perm-chip perm-mod">Moderator</span></td><td>Members with roles in <code>moderator_roles</code> OR Discord "Ban Members" permission</td><td>Role name or Discord permission</td></tr>
+          <tr><td><span class="perm-chip perm-dj">DJ</span></td><td>Members with roles in <code>dj_roles</code></td><td>Role name match</td></tr>
+          <tr><td><span class="perm-chip perm-all">Everyone</span></td><td>All server members</td><td>—</td></tr>
+        </tbody>
+      </table>
+    </section>
+
+    <!-- MODERATION -->
+    <section class="doc-section reveal" id="moderation">
+      <h2 class="gradient-text" data-t="mod-h2">Commands — Moderation</h2>
+      <p class="muted">All moderation commands require <span class="perm-chip perm-mod">Moderator</span> or <span class="perm-chip perm-admin">Admin</span> unless noted.</p>
+
+      <div class="cmd-block">
+        <div class="cmd-name">/ban</div>
+        <div class="cmd-desc" data-t="ban-desc">Ban a member from the server.</div>
+        <div class="cmd-opts"><table><thead><tr><th>Option</th><th>Required</th><th>Description</th></tr></thead><tbody>
+          <tr><td><code>user</code></td><td><span class="badge-req">Required</span></td><td>The member to ban</td></tr>
+          <tr><td><code>reason</code></td><td><span class="badge-opt">Optional</span></td><td>Reason for the ban</td></tr>
+          <tr><td><code>delete_days</code></td><td><span class="badge-opt">Optional</span></td><td>Days of messages to delete (0–7)</td></tr>
+        </tbody></table></div>
+        <div class="cmd-example">/ban user:@BadUser reason:Spamming delete_days:1</div>
+      </div>
+
+      <div class="cmd-block">
+        <div class="cmd-name">/unban</div>
+        <div class="cmd-desc" data-t="unban-desc">Unban a previously banned user.</div>
+        <div class="cmd-opts"><table><thead><tr><th>Option</th><th>Required</th><th>Description</th></tr></thead><tbody>
+          <tr><td><code>user_id</code></td><td><span class="badge-req">Required</span></td><td>The Discord user ID of the banned user</td></tr>
+          <tr><td><code>reason</code></td><td><span class="badge-opt">Optional</span></td><td>Reason for unbanning</td></tr>
+        </tbody></table></div>
+      </div>
+
+      <div class="cmd-block">
+        <div class="cmd-name">/kick</div>
+        <div class="cmd-desc" data-t="kick-desc">Remove a member from the server (they can rejoin).</div>
+        <div class="cmd-opts"><table><thead><tr><th>Option</th><th>Required</th><th>Description</th></tr></thead><tbody>
+          <tr><td><code>user</code></td><td><span class="badge-req">Required</span></td><td>The member to kick</td></tr>
+          <tr><td><code>reason</code></td><td><span class="badge-opt">Optional</span></td><td>Reason for the kick</td></tr>
+        </tbody></table></div>
+      </div>
+
+      <div class="cmd-block">
+        <div class="cmd-name">/mute</div>
+        <div class="cmd-desc" data-t="mute-desc">Temporarily timeout a member using Discord's native timeout. Max 28 days.</div>
+        <div class="cmd-opts"><table><thead><tr><th>Option</th><th>Required</th><th>Description</th></tr></thead><tbody>
+          <tr><td><code>user</code></td><td><span class="badge-req">Required</span></td><td>The member to mute</td></tr>
+          <tr><td><code>duration</code></td><td><span class="badge-req">Required</span></td><td><code>10m</code>, <code>2h</code>, <code>1d</code>, <code>7d</code> …</td></tr>
+          <tr><td><code>reason</code></td><td><span class="badge-opt">Optional</span></td><td>Reason</td></tr>
+        </tbody></table></div>
+        <div class="cmd-example">/mute user:@Spammer duration:1h reason:Spam</div>
+      </div>
+
+      <div class="cmd-block">
+        <div class="cmd-name">/unmute</div>
+        <div class="cmd-desc" data-t="unmute-desc">Remove a timeout from a member.</div>
+        <div class="cmd-opts"><table><thead><tr><th>Option</th><th>Required</th><th>Description</th></tr></thead><tbody>
+          <tr><td><code>user</code></td><td><span class="badge-req">Required</span></td><td>The member to unmute</td></tr>
+        </tbody></table></div>
+      </div>
+
+      <div class="cmd-block">
+        <div class="cmd-name">/warn</div>
+        <div class="cmd-desc" data-t="warn-desc">Issue a formal warning. Warnings are saved and can be reviewed later.</div>
+        <div class="cmd-opts"><table><thead><tr><th>Option</th><th>Required</th><th>Description</th></tr></thead><tbody>
+          <tr><td><code>user</code></td><td><span class="badge-req">Required</span></td><td>The member to warn</td></tr>
+          <tr><td><code>reason</code></td><td><span class="badge-req">Required</span></td><td>Reason for the warning</td></tr>
+        </tbody></table></div>
+      </div>
+
+      <div class="cmd-block">
+        <div class="cmd-name">/warnings</div>
+        <div class="cmd-desc" data-t="warnings-desc">View all warnings for a user.</div>
+        <div class="cmd-opts"><table><thead><tr><th>Option</th><th>Required</th><th>Description</th></tr></thead><tbody>
+          <tr><td><code>user</code></td><td><span class="badge-req">Required</span></td><td>The member whose warnings to view</td></tr>
