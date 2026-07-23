@@ -782,3 +782,101 @@ active_language: en</pre>
         <div class="cmd-desc" data-t="warnings-desc">View all warnings for a user.</div>
         <div class="cmd-opts"><table><thead><tr><th>Option</th><th>Required</th><th>Description</th></tr></thead><tbody>
           <tr><td><code>user</code></td><td><span class="badge-req">Required</span></td><td>The member whose warnings to view</td></tr>
+        </tbody></table></div>
+      </div>
+
+      <div class="cmd-block">
+        <div class="cmd-name">/clearwarnings</div>
+        <div class="cmd-desc" data-t="clrwarn-desc">Remove all warnings from a user's record.</div>
+        <div class="cmd-opts"><table><thead><tr><th>Option</th><th>Required</th><th>Description</th></tr></thead><tbody>
+          <tr><td><code>user</code></td><td><span class="badge-req">Required</span></td><td>The member to clear warnings for</td></tr>
+        </tbody></table></div>
+      </div>
+
+      <div class="cmd-block">
+        <div class="cmd-name">/purge</div>
+        <div class="cmd-desc" data-t="purge-desc">Delete multiple messages from the current channel. Discord only allows bulk-deletion of messages under 14 days old.</div>
+        <div class="cmd-opts"><table><thead><tr><th>Option</th><th>Required</th><th>Description</th></tr></thead><tbody>
+          <tr><td><code>count</code></td><td><span class="badge-req">Required</span></td><td>Number of messages to delete (1–100)</td></tr>
+          <tr><td><code>user</code></td><td><span class="badge-opt">Optional</span></td><td>Only delete messages from this user</td></tr>
+        </tbody></table></div>
+      </div>
+
+      <div class="cmd-block">
+        <div class="cmd-name">/slowmode</div>
+        <div class="cmd-desc" data-t="slow-desc">Set a cooldown between messages in the current channel.</div>
+        <div class="cmd-opts"><table><thead><tr><th>Option</th><th>Required</th><th>Description</th></tr></thead><tbody>
+          <tr><td><code>seconds</code></td><td><span class="badge-req">Required</span></td><td>Delay in seconds (0 disables, max 21600)</td></tr>
+        </tbody></table></div>
+      </div>
+
+      <div class="cmd-block">
+        <div class="cmd-name">/lock <span style="color:var(--muted);font-weight:400;font-size:.9rem">/ /unlock</span></div>
+        <div class="cmd-desc" data-t="lock-desc">Prevent / allow @everyone from sending messages in the current channel. No options needed.</div>
+      </div>
+
+      <div class="cmd-block">
+        <div class="cmd-name">/modlog</div>
+        <div class="cmd-desc" data-t="modlog-desc">Set the channel where moderation actions are logged.</div>
+        <div class="cmd-opts"><table><thead><tr><th>Option</th><th>Required</th><th>Description</th></tr></thead><tbody>
+          <tr><td><code>channel</code></td><td><span class="badge-req">Required</span></td><td>The channel to use as the mod log</td></tr>
+        </tbody></table></div>
+      </div>
+
+      <div class="cmd-block">
+        <div class="cmd-name">/userinfo</div>
+        <div class="cmd-desc" data-t="userinfo-desc">Display information about a member — username, account & join dates, all roles, and warning count.</div>
+        <div class="cmd-opts"><table><thead><tr><th>Option</th><th>Required</th><th>Description</th></tr></thead><tbody>
+          <tr><td><code>user</code></td><td><span class="badge-opt">Optional</span></td><td>The member to look up (defaults to yourself)</td></tr>
+        </tbody></table></div>
+      </div>
+    </section>
+
+    <!-- TICKETS -->
+    <section class="doc-section reveal" id="tickets">
+      <h2 class="gradient-text" data-t="tick-h2">Commands — Ticket System</h2>
+
+      <h3>Initial Setup</h3>
+      <div class="steps">
+        <div class="step"><div class="step-num">1</div><div class="step-body"><strong>Enable tickets</strong><p>Set <code>tickets.enabled</code> to <code>true</code> in config.json and fill in <code>panel_channel</code>, <code>log_channel</code>, <code>staff_roles</code>, <code>discord_category</code>.</p></div></div>
+        <div class="step"><div class="step-num">2</div><div class="step-body"><strong>Add categories</strong><p>Add your categories in the <code>categories</code> array, or use <code>/ticket addcategory</code> at runtime.</p></div></div>
+        <div class="step"><div class="step-num">3</div><div class="step-body"><strong>Post the panel</strong><p>Run <code>/ticket panel</code> to post the ticket creation panel in the configured channel.</p></div></div>
+      </div>
+
+      <h3>Commands</h3>
+
+      <div class="cmd-block">
+        <div class="cmd-name">/ticket setup <span class="badge-perm">Admin</span></div>
+        <div class="cmd-desc" data-t="tsetup-desc">Configure the ticket system through Discord (overrides config.json).</div>
+        <div class="cmd-opts"><table><thead><tr><th>Option</th><th>Required</th><th>Description</th></tr></thead><tbody>
+          <tr><td><code>panel_channel</code></td><td><span class="badge-req">Required</span></td><td>Channel for the ticket panel</td></tr>
+          <tr><td><code>log_channel</code></td><td><span class="badge-req">Required</span></td><td>Channel for ticket logs</td></tr>
+          <tr><td><code>staff_role</code></td><td><span class="badge-req">Required</span></td><td>Role that can manage all tickets</td></tr>
+          <tr><td><code>category</code></td><td><span class="badge-req">Required</span></td><td>Discord category for ticket channels</td></tr>
+          <tr><td><code>max_per_user</code></td><td><span class="badge-opt">Optional</span></td><td>Max open tickets per user (default: 3)</td></tr>
+        </tbody></table></div>
+      </div>
+
+      <div class="cmd-block">
+        <div class="cmd-name">/ticket panel <span class="badge-perm">Admin</span></div>
+        <div class="cmd-desc" data-t="tpanel-desc">Post or refresh the ticket creation panel. Run this after any category changes.</div>
+      </div>
+
+      <div class="cmd-block">
+        <div class="cmd-name">/ticket addcategory <span class="badge-perm">Admin</span></div>
+        <div class="cmd-desc">Add a new ticket category at runtime without editing config.json. Run <code>/ticket panel</code> after adding.</div>
+        <div class="cmd-opts"><table><thead><tr><th>Option</th><th>Required</th><th>Description</th></tr></thead><tbody>
+          <tr><td><code>id</code></td><td><span class="badge-req">Required</span></td><td>Unique ID (no spaces)</td></tr>
+          <tr><td><code>name</code></td><td><span class="badge-req">Required</span></td><td>Display name</td></tr>
+          <tr><td><code>emoji</code></td><td><span class="badge-req">Required</span></td><td>Emoji next to the name</td></tr>
+          <tr><td><code>description</code></td><td><span class="badge-req">Required</span></td><td>Short description</td></tr>
+          <tr><td><code>staff_role</code></td><td><span class="badge-opt">Optional</span></td><td>Role ID specific to this category</td></tr>
+        </tbody></table></div>
+      </div>
+
+      <div class="cmd-block">
+        <div class="cmd-name">/ticket removecategory <span class="badge-perm">Admin</span></div>
+        <div class="cmd-desc">Remove a runtime category. Only categories added via <code>/ticket addcategory</code> can be removed this way.</div>
+        <div class="cmd-opts"><table><thead><tr><th>Option</th><th>Required</th><th>Description</th></tr></thead><tbody>
+          <tr><td><code>id</code></td><td><span class="badge-req">Required</span></td><td>The category ID to remove</td></tr>
+        </tbody></table></div>
