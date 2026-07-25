@@ -880,3 +880,101 @@ active_language: en</pre>
         <div class="cmd-opts"><table><thead><tr><th>Option</th><th>Required</th><th>Description</th></tr></thead><tbody>
           <tr><td><code>id</code></td><td><span class="badge-req">Required</span></td><td>The category ID to remove</td></tr>
         </tbody></table></div>
+      </div>
+
+      <div class="cmd-block">
+        <div class="cmd-name">/ticket addsubcategory <span class="badge-perm">Admin</span></div>
+        <div class="cmd-desc">Add a subcategory under an existing runtime category.</div>
+        <div class="cmd-opts"><table><thead><tr><th>Option</th><th>Required</th><th>Description</th></tr></thead><tbody>
+          <tr><td><code>parent_id</code></td><td><span class="badge-req">Required</span></td><td>ID of the parent category</td></tr>
+          <tr><td><code>id</code></td><td><span class="badge-req">Required</span></td><td>Unique ID for the subcategory</td></tr>
+          <tr><td><code>name</code></td><td><span class="badge-req">Required</span></td><td>Display name</td></tr>
+          <tr><td><code>emoji</code></td><td><span class="badge-req">Required</span></td><td>Emoji</td></tr>
+          <tr><td><code>description</code></td><td><span class="badge-req">Required</span></td><td>Short description</td></tr>
+        </tbody></table></div>
+      </div>
+
+      <div class="cmd-block">
+        <div class="cmd-name">/ticket list <span class="badge-perm">Admin / Mod</span></div>
+        <div class="cmd-desc" data-t="tlist-desc">List all currently open tickets.</div>
+      </div>
+
+      <div class="cmd-block">
+        <div class="cmd-name">/ticket config <span class="badge-perm">Admin</span></div>
+        <div class="cmd-desc" data-t="tcfg-desc">Display the current ticket system configuration.</div>
+      </div>
+
+      <div class="cmd-block">
+        <div class="cmd-name">/close</div>
+        <div class="cmd-desc">Close the current ticket channel. Must be run inside a ticket. A confirmation prompt appears before closing. The ticket is logged to the log channel.</div>
+        <div class="callout tip" style="margin-top:10px"><span class="callout-icon">✅</span><span>Can be used by Staff, Admin, or the ticket owner.</span></div>
+      </div>
+
+      <div class="cmd-block">
+        <div class="cmd-name">/add <span class="badge-perm">Staff / Admin</span></div>
+        <div class="cmd-desc">Add a user to the current ticket.</div>
+        <div class="cmd-opts"><table><thead><tr><th>Option</th><th>Required</th><th>Description</th></tr></thead><tbody>
+          <tr><td><code>user</code></td><td><span class="badge-req">Required</span></td><td>The member to add</td></tr>
+        </tbody></table></div>
+      </div>
+
+      <div class="cmd-block">
+        <div class="cmd-name">/remove <span class="badge-perm">Staff / Admin</span></div>
+        <div class="cmd-desc">Remove a user from the current ticket.</div>
+        <div class="cmd-opts"><table><thead><tr><th>Option</th><th>Required</th><th>Description</th></tr></thead><tbody>
+          <tr><td><code>user</code></td><td><span class="badge-req">Required</span></td><td>The member to remove</td></tr>
+        </tbody></table></div>
+      </div>
+    </section>
+
+    <!-- AUTO-ROLE -->
+    <section class="doc-section reveal" id="autorole">
+      <h2 class="gradient-text" data-t="ar-h2">Commands — Auto-Role</h2>
+      <p data-t="ar-p">Automatically assign a role to every new member when they join.</p>
+      <div class="callout warn"><span class="callout-icon">⚠️</span><span>The bot's role must be <strong>above</strong> the target role in Server Settings → Roles.</span></div>
+
+      <div class="cmd-block">
+        <div class="cmd-name">/joinrole set <span class="badge-perm">Admin</span></div>
+        <div class="cmd-desc" data-t="jrset-desc">Set the role to automatically give to new members.</div>
+        <div class="cmd-opts"><table><thead><tr><th>Option</th><th>Required</th><th>Description</th></tr></thead><tbody>
+          <tr><td><code>role</code></td><td><span class="badge-req">Required</span></td><td>The role to assign</td></tr>
+        </tbody></table></div>
+      </div>
+
+      <div class="cmd-block">
+        <div class="cmd-name">/joinrole disable <span class="badge-perm">Admin</span></div>
+        <div class="cmd-desc" data-t="jrdis-desc">Disable automatic role assignment.</div>
+      </div>
+
+      <div class="cmd-block">
+        <div class="cmd-name">/joinrole status <span class="badge-perm">Admin</span></div>
+        <div class="cmd-desc" data-t="jrstat-desc">Check if auto-role is enabled and which role is configured.</div>
+      </div>
+
+      <div class="cmd-block">
+        <div class="cmd-name">/joinrole check <span class="badge-perm">Admin</span></div>
+        <div class="cmd-desc" data-t="jrchk-desc">Verify that the bot has permission to assign the configured role. Useful for diagnosing issues.</div>
+      </div>
+    </section>
+
+    <!-- ROLE MENUS -->
+    <section class="doc-section reveal" id="rolemenu">
+      <h2 class="gradient-text" data-t="rm-h2">Commands — Role Menus</h2>
+      <p>Create self-assignable role menus that members can interact with using buttons. A menu can hold up to <strong>20 roles</strong>.</p>
+
+      <h3>Quick Start</h3>
+<pre><button class="copy-btn" onclick="copyPre(this)">Copy</button>/rolemenu create title:Pick your roles mode:multi
+/rolemenu add menu_id:MENU_ID role:@Gamer label:Gamer
+/rolemenu post menu_id:MENU_ID channel:#roles</pre>
+
+      <div class="cmd-block">
+        <div class="cmd-name">/rolemenu create <span class="badge-perm">Admin</span></div>
+        <div class="cmd-desc" data-t="rmcr-desc">Create a new role menu. Returns a menu ID for the next steps.</div>
+        <div class="cmd-opts"><table><thead><tr><th>Option</th><th>Required</th><th>Description</th></tr></thead><tbody>
+          <tr><td><code>title</code></td><td><span class="badge-req">Required</span></td><td>Title of the role menu</td></tr>
+          <tr><td><code>mode</code></td><td><span class="badge-req">Required</span></td><td><code>multi</code> (pick many) or <code>single</code> (pick one)</td></tr>
+        </tbody></table></div>
+      </div>
+
+      <div class="cmd-block">
+        <div class="cmd-name">/rolemenu add <span class="badge-perm">Admin</span></div>
