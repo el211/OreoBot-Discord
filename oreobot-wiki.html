@@ -978,3 +978,101 @@ active_language: en</pre>
 
       <div class="cmd-block">
         <div class="cmd-name">/rolemenu add <span class="badge-perm">Admin</span></div>
+        <div class="cmd-desc" data-t="rmadd-desc">Add a role button to an existing menu.</div>
+        <div class="cmd-opts"><table><thead><tr><th>Option</th><th>Required</th><th>Description</th></tr></thead><tbody>
+          <tr><td><code>menu_id</code></td><td><span class="badge-req">Required</span></td><td>The menu ID</td></tr>
+          <tr><td><code>role</code></td><td><span class="badge-req">Required</span></td><td>The role to add</td></tr>
+          <tr><td><code>label</code></td><td><span class="badge-req">Required</span></td><td>Text shown on the button</td></tr>
+        </tbody></table></div>
+      </div>
+
+      <div class="cmd-block">
+        <div class="cmd-name">/rolemenu post <span class="badge-perm">Admin</span></div>
+        <div class="cmd-desc" data-t="rmpost-desc">Post the role menu in a channel.</div>
+        <div class="cmd-opts"><table><thead><tr><th>Option</th><th>Required</th><th>Description</th></tr></thead><tbody>
+          <tr><td><code>menu_id</code></td><td><span class="badge-req">Required</span></td><td>The menu ID</td></tr>
+          <tr><td><code>channel</code></td><td><span class="badge-req">Required</span></td><td>Channel to post in</td></tr>
+        </tbody></table></div>
+      </div>
+
+      <div class="cmd-block">
+        <div class="cmd-name">/rolemenu list <span class="badge-perm">Admin</span></div>
+        <div class="cmd-desc" data-t="rmlist-desc">List all role menus and their IDs.</div>
+      </div>
+
+      <div class="cmd-block">
+        <div class="cmd-name">/rolemenu delete <span class="badge-perm">Admin</span></div>
+        <div class="cmd-desc" data-t="rmdel-desc">Delete a role menu.</div>
+        <div class="cmd-opts"><table><thead><tr><th>Option</th><th>Required</th><th>Description</th></tr></thead><tbody>
+          <tr><td><code>menu_id</code></td><td><span class="badge-req">Required</span></td><td>The menu ID to delete</td></tr>
+        </tbody></table></div>
+      </div>
+    </section>
+
+    <!-- GIVEAWAYS -->
+    <section class="doc-section reveal" id="giveaways">
+      <h2 class="gradient-text" data-t="giv-h2">Commands — Giveaways</h2>
+      <p>Run giveaways with automatic timer, random winner selection, and reroll support. Giveaway timers <strong>survive bot restarts</strong>.</p>
+
+      <div class="cmd-block">
+        <div class="cmd-name">/giveaway create <span class="badge-perm">Admin</span></div>
+        <div class="cmd-desc" data-t="gcr-desc">Start a new giveaway. Posts an embed with an Enter Giveaway button. When the timer ends, winners are picked and announced.</div>
+        <div class="cmd-opts"><table><thead><tr><th>Option</th><th>Required</th><th>Description</th></tr></thead><tbody>
+          <tr><td><code>prize</code></td><td><span class="badge-req">Required</span></td><td>What you're giving away</td></tr>
+          <tr><td><code>duration</code></td><td><span class="badge-req">Required</span></td><td><code>10m</code>, <code>2h</code>, <code>1d</code>, <code>7d</code></td></tr>
+          <tr><td><code>winners</code></td><td><span class="badge-req">Required</span></td><td>How many winners to pick</td></tr>
+          <tr><td><code>channel</code></td><td><span class="badge-opt">Optional</span></td><td>Channel to post in (defaults to current)</td></tr>
+        </tbody></table></div>
+        <div class="cmd-example">/giveaway create prize:Discord Nitro duration:1d winners:1 channel:#giveaways</div>
+      </div>
+
+      <div class="cmd-block">
+        <div class="cmd-name">/giveaway end <span class="badge-perm">Admin</span></div>
+        <div class="cmd-desc" data-t="gend-desc">End a giveaway early and immediately pick winners.</div>
+        <div class="cmd-opts"><table><thead><tr><th>Option</th><th>Required</th><th>Description</th></tr></thead><tbody>
+          <tr><td><code>giveaway_id</code></td><td><span class="badge-req">Required</span></td><td>ID of the giveaway</td></tr>
+        </tbody></table></div>
+      </div>
+
+      <div class="cmd-block">
+        <div class="cmd-name">/giveaway reroll <span class="badge-perm">Admin</span></div>
+        <div class="cmd-desc" data-t="grer-desc">Pick new winners for an already-ended giveaway.</div>
+        <div class="cmd-opts"><table><thead><tr><th>Option</th><th>Required</th><th>Description</th></tr></thead><tbody>
+          <tr><td><code>giveaway_id</code></td><td><span class="badge-req">Required</span></td><td>ID of the ended giveaway</td></tr>
+        </tbody></table></div>
+      </div>
+
+      <div class="cmd-block">
+        <div class="cmd-name">/giveaway list <span class="badge-perm">Admin</span></div>
+        <div class="cmd-desc" data-t="glis-desc">Show all currently active giveaways with their IDs, prizes, and end times.</div>
+      </div>
+    </section>
+
+    <!-- MUSIC -->
+    <section class="doc-section reveal" id="music">
+      <h2 class="gradient-text" data-t="mus-h2">Commands — Music</h2>
+      <p>Play music in voice channels. Requires <code>music.enabled: true</code> in config.json. Music controls require a <span class="perm-chip perm-dj">DJ</span> role.</p>
+
+      <div class="grid2" style="margin-bottom:20px">
+        <div class="card">
+          <h4 style="margin:0 0 8px;color:#4fa6f2">Direct Backend</h4>
+          <p class="muted" style="font-size:.9rem;margin:0">Requires <code>yt-dlp</code> + <code>ffmpeg</code> installed locally. Easy setup, good for small bots.</p>
+        </div>
+        <div class="card">
+          <h4 style="margin:0 0 8px;color:#4fa6f2">Lavalink Backend</h4>
+          <p class="muted" style="font-size:.9rem;margin:0">Connects to a Lavalink server. Recommended for stability and larger bots. Requires extra server setup.</p>
+        </div>
+      </div>
+
+      <div class="cmd-block">
+        <div class="cmd-name">/play</div>
+        <div class="cmd-desc" data-t="play-desc">Play a song or add it to the queue. You must be in a voice channel.</div>
+        <div class="cmd-opts"><table><thead><tr><th>Option</th><th>Required</th><th>Description</th></tr></thead><tbody>
+          <tr><td><code>query</code></td><td><span class="badge-req">Required</span></td><td>Song name or YouTube URL</td></tr>
+        </tbody></table></div>
+      </div>
+
+      <div class="cmd-block">
+        <div class="cmd-name">/skip <span class="badge-perm">DJ</span></div>
+        <div class="cmd-desc" data-t="skip-desc">Skip the currently playing song.</div>
+      </div>
