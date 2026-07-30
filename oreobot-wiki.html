@@ -1076,3 +1076,101 @@ active_language: en</pre>
         <div class="cmd-name">/skip <span class="badge-perm">DJ</span></div>
         <div class="cmd-desc" data-t="skip-desc">Skip the currently playing song.</div>
       </div>
+
+      <div class="cmd-block">
+        <div class="cmd-name">/stop <span class="badge-perm">DJ</span></div>
+        <div class="cmd-desc" data-t="stop-desc">Stop playback, clear the queue, and disconnect the bot from the voice channel.</div>
+      </div>
+
+      <div class="cmd-block">
+        <div class="cmd-name">/queue</div>
+        <div class="cmd-desc" data-t="queue-desc">Show the current song queue including the now-playing song.</div>
+      </div>
+
+      <div class="cmd-block">
+        <div class="cmd-name">/nowplaying</div>
+        <div class="cmd-desc" data-t="nowp-desc">Show details about the currently playing song (title, duration, requester).</div>
+      </div>
+
+      <div class="cmd-block">
+        <div class="cmd-name">/pause <span style="color:var(--muted);font-weight:400"> / </span>/resume</div>
+        <div class="cmd-desc" data-t="pausres-desc">Pause or resume playback.</div>
+      </div>
+
+      <div class="cmd-block">
+        <div class="cmd-name">/volume <span class="badge-perm">DJ</span></div>
+        <div class="cmd-desc" data-t="vol-desc">Change the playback volume.</div>
+        <div class="cmd-opts"><table><thead><tr><th>Option</th><th>Required</th><th>Description</th></tr></thead><tbody>
+          <tr><td><code>level</code></td><td><span class="badge-req">Required</span></td><td>Volume from 0 to 100</td></tr>
+        </tbody></table></div>
+      </div>
+    </section>
+
+    <!-- MINECRAFT -->
+    <section class="doc-section reveal" id="minecraft">
+      <h2 class="gradient-text" data-t="mc-h2">Commands — Minecraft Integration</h2>
+      <p data-t="mc-p">Connect your Discord server to a Minecraft server via RCON.</p>
+
+      <h3>Setup</h3>
+      <p>In your Minecraft <code>server.properties</code>:</p>
+<pre><button class="copy-btn" onclick="copyPre(this)">Copy</button>enable-rcon=true
+rcon.port=25575
+rcon.password=your_password</pre>
+      <p>In <code>config.json</code>:</p>
+<pre><button class="copy-btn" onclick="copyPre(this)">Copy</button>"minecraft": {
+  "enabled": true,
+  "rcon_ip": "your.server.ip",
+  "rcon_port": 25575,
+  "rcon_password": "your_password"
+}</pre>
+
+      <div class="cmd-block">
+        <div class="cmd-name">/mc status</div>
+        <div class="cmd-desc" data-t="mcst-desc">Check if the Minecraft server is online and RCON is connected.</div>
+      </div>
+
+      <div class="cmd-block">
+        <div class="cmd-name">/mc players</div>
+        <div class="cmd-desc" data-t="mcpl-desc">List all players currently online on the Minecraft server.</div>
+      </div>
+
+      <div class="cmd-block">
+        <div class="cmd-name">/mc command <span class="badge-perm">Admin</span></div>
+        <div class="cmd-desc" data-t="mccmd-desc">Execute any RCON command on the server.</div>
+        <div class="cmd-opts"><table><thead><tr><th>Option</th><th>Required</th><th>Description</th></tr></thead><tbody>
+          <tr><td><code>command</code></td><td><span class="badge-req">Required</span></td><td>The command to run (without the /)</td></tr>
+        </tbody></table></div>
+        <div class="cmd-example">/mc command command:give PlayerName diamond 64</div>
+      </div>
+
+      <div class="cmd-block">
+        <div class="cmd-name">/mc whitelist <span class="badge-perm">Admin</span></div>
+        <div class="cmd-desc" data-t="mcwl-desc">Add or remove a player from the server whitelist.</div>
+        <div class="cmd-opts"><table><thead><tr><th>Option</th><th>Required</th><th>Description</th></tr></thead><tbody>
+          <tr><td><code>action</code></td><td><span class="badge-req">Required</span></td><td><code>add</code> or <code>remove</code></td></tr>
+          <tr><td><code>player</code></td><td><span class="badge-req">Required</span></td><td>Minecraft username</td></tr>
+        </tbody></table></div>
+      </div>
+
+      <div class="cmd-block">
+        <div class="cmd-name">/mc link</div>
+        <div class="cmd-desc">Link your Discord account to your Minecraft account. The bot sends you a DM with a 6-character code (expires in 10 minutes). Then in Minecraft run:</div>
+        <div class="cmd-example">/discord link YOURCODE</div>
+      </div>
+
+      <div class="cmd-block">
+        <div class="cmd-name">/mc unlink</div>
+        <div class="cmd-desc" data-t="mculnk-desc">Remove the link between your Discord and Minecraft account.</div>
+      </div>
+
+      <div class="cmd-block">
+        <div class="cmd-name">/mc profile</div>
+        <div class="cmd-desc" data-t="mcprof-desc">View your linked Minecraft profile (username, balance, homes).</div>
+        <div class="cmd-opts"><table><thead><tr><th>Option</th><th>Required</th><th>Description</th></tr></thead><tbody>
+          <tr><td><code>user</code></td><td><span class="badge-opt">Optional</span></td><td>View another member's profile (Admin only)</td></tr>
+        </tbody></table></div>
+      </div>
+
+      <div class="cmd-block">
+        <div class="cmd-name">/mc linked <span class="badge-perm">Admin</span></div>
+        <div class="cmd-desc" data-t="mclnkd-desc">List all Discord↔Minecraft linked accounts on the server.</div>
