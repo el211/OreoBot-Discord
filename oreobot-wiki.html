@@ -1174,3 +1174,101 @@ rcon.password=your_password</pre>
       <div class="cmd-block">
         <div class="cmd-name">/mc linked <span class="badge-perm">Admin</span></div>
         <div class="cmd-desc" data-t="mclnkd-desc">List all Discord↔Minecraft linked accounts on the server.</div>
+      </div>
+    </section>
+
+    <!-- OREOESSENTIALS -->
+    <section class="doc-section reveal" id="oreoessentials">
+      <h2 class="gradient-text" data-t="oe-h2">OreoEssentials Plugin</h2>
+      <p data-t="oe-intro">OreoEssentials is a companion Minecraft plugin that extends OreoBot's Minecraft integration. It must be installed on your Minecraft server to enable account linking and live player-data lookups.</p>
+
+      <div class="callout info">
+        <span class="callout-icon">🧩</span>
+        <span data-t="oe-callout">OreoEssentials handles the <strong>Minecraft side</strong> of the bridge. OreoBot handles the <strong>Discord side</strong>. The two communicate exclusively through RCON — no shared database, no port changes needed beyond what you already have.</span>
+      </div>
+
+      <!-- HOW IT WORKS -->
+      <h3 data-t="oe-h3how">How the bridge works</h3>
+      <p data-t="oe-howp">When a user runs a bot command that needs Minecraft data (like <code>/mc profile</code>), OreoBot sends a special RCON command to your server. OreoEssentials intercepts that command, reads the requested data (balance, homes, online status…), and replies through the RCON response. OreoBot then formats the reply and posts it as a Discord embed.</p>
+
+      <div class="grid2" style="margin:18px 0">
+        <div class="card" style="border-left:3px solid var(--b2)">
+          <h4 style="margin:0 0 8px;color:#4fa6f2" data-t="oe-dside">Discord side — OreoBot</h4>
+          <p class="muted" style="font-size:.9rem;margin:0" data-t="oe-dsidep">Receives slash command → sends <code>oe-discord &lt;sub&gt; &lt;uuid&gt;</code> via RCON → parses response → posts embed to Discord</p>
+        </div>
+        <div class="card" style="border-left:3px solid var(--b3)">
+          <h4 style="margin:0 0 8px;color:#4fa6f2" data-t="oe-mside">Minecraft side — OreoEssentials</h4>
+          <p class="muted" style="font-size:.9rem;margin:0" data-t="oe-msidep">Registers the <code>oe-discord</code> command → reads economy / homes / online data → replies with a one-line <code>OK: …</code> or <code>ERR: …</code> string</p>
+        </div>
+      </div>
+
+      <!-- ACCOUNT LINKING -->
+      <h3 data-t="oe-h3lnk">Account linking system</h3>
+      <p data-t="oe-lnkp">The linking flow is a two-step handshake between Discord and Minecraft. OreoEssentials owns the in-game half; OreoBot owns the Discord half.</p>
+
+      <div class="steps">
+        <div class="step">
+          <div class="step-num">1</div>
+          <div class="step-body">
+            <strong data-t="oe-s1t">User runs <code>/mc link</code> in Discord</strong>
+            <p data-t="oe-s1p">OreoBot generates a short 6-character code, saves a pending entry (Discord ID + expiry), and DMs the code to the user. The code expires in <strong>10 minutes</strong>.</p>
+          </div>
+        </div>
+        <div class="step">
+          <div class="step-num">2</div>
+          <div class="step-body">
+            <strong data-t="oe-s2t">User runs <code>/discord link &lt;code&gt;</code> in Minecraft</strong>
+            <p data-t="oe-s2p">OreoEssentials' <code>DiscordLinkCommand</code> receives the code, calls <code>DiscordLinkManager.confirmLink()</code>, validates the pending file/document, and writes a confirmed link entry (Discord ID ↔ UUID ↔ username). If the code doesn't exist or is expired, the player gets a clear error message.</p>
+          </div>
+        </div>
+        <div class="step">
+          <div class="step-num">3</div>
+          <div class="step-body">
+            <strong data-t="oe-s3t">OreoBot polls and finalises the link</strong>
+            <p data-t="oe-s3p">OreoBot detects the confirmed entry on its next polling cycle (≤ 15 seconds) and updates the Discord member's nickname and linked role automatically.</p>
+          </div>
+        </div>
+      </div>
+
+      <!-- IN-GAME DISCORD COMMAND -->
+      <h3 data-t="oe-h3igc">In-game command — <code>/discord</code></h3>
+      <p data-t="oe-igcp">OreoEssentials registers the <code>/discord</code> command for players inside Minecraft:</p>
+      <div class="cmd-block">
+        <div class="cmd-name">/discord link &lt;code&gt;</div>
+        <div class="cmd-desc" data-t="oe-dlnkd">Confirm the link between your Minecraft account and your Discord account using the code you received via DM from OreoBot.</div>
+        <div class="cmd-example">/discord link AB12CD</div>
+      </div>
+      <div class="cmd-block">
+        <div class="cmd-name">/discord status</div>
+        <div class="cmd-desc" data-t="oe-dstd">Check whether your Minecraft account is currently linked and see your Discord ID if it is.</div>
+      </div>
+
+      <!-- LINK BACKEND CONFIG -->
+      <h3 data-t="oe-h3cfg">Link storage backend — <code>config.yml</code></h3>
+      <p data-t="oe-cfgp">OreoEssentials stores pending and confirmed link data. The backend is configured in OreoEssentials' <code>config.yml</code>:</p>
+<pre><button class="copy-btn" onclick="copyPre(this)">Copy</button>discord:
+  link_backend: "file"   # "file" (default) or "mongodb" for cross-network</pre>
+
+      <table class="tbl" style="margin-top:14px">
+        <thead><tr><th data-t="oe-th-val">Value</th><th data-t="oe-th-loc">Storage location</th><th data-t="oe-th-best">Best for</th></tr></thead>
+        <tbody>
+          <tr>
+            <td><code>"file"</code></td>
+            <td data-t="oe-file-loc"><code>data/mc_links/pending/</code> — one <code>.json</code> file per code</td>
+            <td data-t="oe-file-use">Single-server setups, no extra dependencies</td>
+          </tr>
+          <tr>
+            <td><code>"mongodb"</code></td>
+            <td data-t="oe-mdb-loc">Collections: <code>discord_link_pending</code>, <code>discord_link_confirmed</code>, <code>discord_links</code></td>
+            <td data-t="oe-mdb-use">Multi-server / BungeeCord networks sharing one database</td>
+          </tr>
+        </tbody>
+      </table>
+      <div class="callout warn" style="margin-top:14px">
+        <span class="callout-icon">⚠️</span>
+        <span data-t="oe-syncwarn">OreoBot's <code>config.json</code> has its own <code>minecraft.link_backend</code> setting — keep it in sync with OreoEssentials' <code>config.yml</code> so both sides read from the same store.</span>
+      </div>
+
+      <!-- RCON EXTENSION COMMANDS -->
+      <h3 data-t="oe-h3rcon">RCON extension commands (<code>oe-discord</code>)</h3>
+      <p data-t="oe-rconp">These are server-side-only commands registered by <code>DiscordRconExtension</code>. They are called automatically by OreoBot over RCON — players cannot run them. Each returns a one-line <code>OK: …</code> result or <code>ERR: …</code> on failure.</p>
