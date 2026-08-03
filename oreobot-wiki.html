@@ -1272,3 +1272,101 @@ rcon.password=your_password</pre>
       <!-- RCON EXTENSION COMMANDS -->
       <h3 data-t="oe-h3rcon">RCON extension commands (<code>oe-discord</code>)</h3>
       <p data-t="oe-rconp">These are server-side-only commands registered by <code>DiscordRconExtension</code>. They are called automatically by OreoBot over RCON — players cannot run them. Each returns a one-line <code>OK: …</code> result or <code>ERR: …</code> on failure.</p>
+
+      <table class="tbl">
+        <thead><tr><th data-t="oe-th-cmd">RCON command</th><th data-t="oe-th-ret">Returns</th><th data-t="oe-th-usb">Used by</th></tr></thead>
+        <tbody>
+          <tr>
+            <td><code>oe-discord balance &lt;uuid&gt;</code></td>
+            <td data-t="oe-rc1">Player's economy balance (e.g. <code>OK: 1,250</code>)</td>
+            <td><code>/mc profile</code></td>
+          </tr>
+          <tr>
+            <td><code>oe-discord homes &lt;uuid&gt;</code></td>
+            <td data-t="oe-rc2">Comma-separated list of <code>name@server</code> (e.g. <code>OK: base@survival,farm@survival</code>)</td>
+            <td><code>/mc profile</code></td>
+          </tr>
+          <tr>
+            <td><code>oe-discord online &lt;uuid&gt;</code></td>
+            <td data-t="oe-rc3"><code>OK: ONLINE &lt;name&gt;</code> or <code>OK: OFFLINE &lt;name&gt; LASTSEEN &lt;epoch&gt;</code></td>
+            <td><code>/mc profile</code></td>
+          </tr>
+          <tr>
+            <td><code>oe-discord inventory &lt;uuid&gt;</code></td>
+            <td data-t="oe-rc4">Top 12 items by quantity (e.g. <code>OK: Diamond x64, Iron Ingot x32</code>)</td>
+            <td data-t="oe-rc4use">Future — reserved for <code>/mc inventory</code></td>
+          </tr>
+        </tbody>
+      </table>
+      <div class="callout tip" style="margin-top:14px">
+        <span class="callout-icon">✅</span>
+        <span data-t="oe-invtip">The <code>inventory</code> sub-command works even for offline players — OreoEssentials reads the last saved inventory snapshot via <code>InventoryService</code> if the player is not currently online.</span>
+      </div>
+
+      <!-- WHAT REQUIRES IT -->
+      <h3 data-t="oe-h3wr">What REQUIRES OreoEssentials</h3>
+      <div class="grid3">
+        <div class="card">
+          <h4 style="margin:0 0 6px;color:#4fa6f2" data-t="oe-c1h">/mc profile — balance</h4>
+          <p class="muted" style="font-size:.88rem;margin:0" data-t="oe-c1p">Shows <code>*(fetch failed)*</code> without the plugin</p>
+        </div>
+        <div class="card">
+          <h4 style="margin:0 0 6px;color:#4fa6f2" data-t="oe-c2h">/mc profile — homes</h4>
+          <p class="muted" style="font-size:.88rem;margin:0" data-t="oe-c2p">Shows <code>*(no data)*</code> without the plugin</p>
+        </div>
+        <div class="card">
+          <h4 style="margin:0 0 6px;color:#4fa6f2" data-t="oe-c3h">/mc profile — online status</h4>
+          <p class="muted" style="font-size:.88rem;margin:0" data-t="oe-c3p">Shows <code>*(fetch failed)*</code> without the plugin</p>
+        </div>
+        <div class="card">
+          <h4 style="margin:0 0 6px;color:#4fa6f2" data-t="oe-c4h">Account linking</h4>
+          <p class="muted" style="font-size:.88rem;margin:0" data-t="oe-c4p"><code>/discord link</code> in-game requires the plugin to be present on the server</p>
+        </div>
+        <div class="card">
+          <h4 style="margin:0 0 6px;color:#4fa6f2" data-t="oe-c5h">Link status check</h4>
+          <p class="muted" style="font-size:.88rem;margin:0" data-t="oe-c5p"><code>/discord status</code> in-game requires the plugin</p>
+        </div>
+        <div class="card">
+          <h4 style="margin:0 0 6px;color:#4fa6f2" data-t="oe-c6h">Inventory lookup</h4>
+          <p class="muted" style="font-size:.88rem;margin:0" data-t="oe-c6p">Future <code>/mc inventory</code> support via <code>oe-discord inventory</code></p>
+        </div>
+      </div>
+
+      <!-- WHAT WORKS WITHOUT IT -->
+      <h3 data-t="oe-h3wo">What works WITHOUT OreoEssentials</h3>
+      <p data-t="oe-wop">Everything that doesn't require live player data or in-game linking still works normally:</p>
+      <ul>
+        <li data-t="oe-wol1">Check server status — <code>/mc status</code></li>
+        <li data-t="oe-wol2">List online players — <code>/mc players</code></li>
+        <li data-t="oe-wol3">Run RCON commands — <code>/mc command</code></li>
+        <li data-t="oe-wol4">Manage the whitelist — <code>/mc whitelist</code></li>
+        <li data-t="oe-wol5">Broadcast messages in-game — <code>/mc say</code></li>
+      </ul>
+      <div class="callout warn">
+        <span class="callout-icon">⚠️</span>
+        <span data-t="oe-nowarn">Without OreoEssentials, <code>/mc link</code> in Discord will generate a code but users will have <strong>no way to confirm it in-game</strong> — the <code>/discord link</code> command won't exist on the server.</span>
+      </div>
+    </section>
+
+    <!-- UTILITY -->
+    <section class="doc-section reveal" id="utility">
+      <h2 class="gradient-text" data-t="util-h2">Commands — Utility</h2>
+
+      <div class="cmd-block">
+        <div class="cmd-name">/say <span class="badge-perm">Admin</span></div>
+        <div class="cmd-desc">Make the bot send a plain text message in a <strong>Discord</strong> channel.</div>
+        <div class="callout warn" style="margin:10px 0 8px">
+          <span class="callout-icon">⚠️</span>
+          <span><strong>Discord only</strong> — this has nothing to do with Minecraft. To send a message into the Minecraft game chat, use <code>/mc say</code> instead.</span>
+        </div>
+        <div class="cmd-opts"><table><thead><tr><th>Option</th><th>Required</th><th>Description</th></tr></thead><tbody>
+          <tr><td><code>channel</code></td><td><span class="badge-req">Required</span></td><td>The Discord channel to send the message in</td></tr>
+          <tr><td><code>message</code></td><td><span class="badge-req">Required</span></td><td>The message text (use <code>\n</code> for line breaks)</td></tr>
+        </tbody></table></div>
+        <div class="cmd-example">/say channel:#announcements message:Server maintenance in 10 minutes!</div>
+      </div>
+
+      <div class="cmd-block">
+        <div class="cmd-name">/mc say <span class="badge-perm">Admin</span></div>
+        <div class="cmd-desc">Broadcast a message in the <strong>Minecraft game chat</strong> via RCON. This is the Minecraft counterpart to <code>/say</code> — it sends to the in-game chat, not to Discord.</div>
+        <div class="callout tip" style="margin:10px 0 8px">
