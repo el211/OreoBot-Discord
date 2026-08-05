@@ -1370,3 +1370,101 @@ rcon.password=your_password</pre>
         <div class="cmd-name">/mc say <span class="badge-perm">Admin</span></div>
         <div class="cmd-desc">Broadcast a message in the <strong>Minecraft game chat</strong> via RCON. This is the Minecraft counterpart to <code>/say</code> — it sends to the in-game chat, not to Discord.</div>
         <div class="callout tip" style="margin:10px 0 8px">
+          <span class="callout-icon">✅</span>
+          <span>The message appears in-game as: <code>[Discord] YourUsername: your message</code></span>
+        </div>
+        <div class="cmd-opts"><table><thead><tr><th>Option</th><th>Required</th><th>Description</th></tr></thead><tbody>
+          <tr><td><code>message</code></td><td><span class="badge-req">Required</span></td><td>The message to broadcast in-game</td></tr>
+        </tbody></table></div>
+        <p class="muted" style="font-size:.88rem;margin-top:8px">Requires Minecraft integration to be enabled in config.json.</p>
+      </div>
+
+      <div class="cmd-block">
+        <div class="cmd-name">/embed <span class="badge-perm">Admin</span></div>
+        <div class="cmd-desc">Create and send a custom embed message in a Discord channel.</div>
+        <div class="cmd-opts"><table><thead><tr><th>Option</th><th>Required</th><th>Description</th></tr></thead><tbody>
+          <tr><td><code>channel</code></td><td><span class="badge-req">Required</span></td><td>Channel to send the embed in</td></tr>
+          <tr><td><code>title</code></td><td><span class="badge-req">Required</span></td><td>Embed title</td></tr>
+          <tr><td><code>description</code></td><td><span class="badge-req">Required</span></td><td>Embed body text (use <code>\n</code> for line breaks)</td></tr>
+          <tr><td><code>colour</code></td><td><span class="badge-opt">Optional</span></td><td>Hex color code (e.g. <code>#ff0000</code>)</td></tr>
+          <tr><td><code>image</code></td><td><span class="badge-opt">Optional</span></td><td>URL of a large image shown at the bottom</td></tr>
+          <tr><td><code>thumbnail</code></td><td><span class="badge-opt">Optional</span></td><td>URL of a small image in the top right corner</td></tr>
+          <tr><td><code>footer</code></td><td><span class="badge-opt">Optional</span></td><td>Footer text</td></tr>
+          <tr><td><code>author</code></td><td><span class="badge-opt">Optional</span></td><td>Author name shown at the top of the embed</td></tr>
+          <tr><td><code>author-icon</code></td><td><span class="badge-opt">Optional</span></td><td>URL of a small icon shown next to the author name</td></tr>
+          <tr><td><code>url</code></td><td><span class="badge-opt">Optional</span></td><td>URL that the embed title links to when clicked</td></tr>
+        </tbody></table></div>
+      </div>
+    </section>
+
+    <!-- CUSTOM COMMANDS -->
+    <section class="doc-section reveal" id="customcmds">
+      <h2 class="gradient-text" data-t="cc-h2">Commands — Custom Commands</h2>
+      <p data-t="cc-p">Define your own slash commands that reply with a fixed message. They appear alongside all built-in commands and are registered with Discord automatically on every startup.</p>
+
+      <h3 data-t="cc-h3cfg">Configuration</h3>
+<pre><button class="copy-btn" onclick="copyPre(this)">Copy</button>"custom_commands": [
+  {
+    "name": "rules",           // Slash command name — users type /rules
+    "description": "Server rules",
+    "message": "**Rules:**\n1. Be respectful\n2. No spam",
+    "ephemeral": true          // true = only the caller sees the reply
+  },
+  {
+    "name": "discord",
+    "description": "Join our Discord",
+    "message": "Join us at: https://discord.gg/example",
+    "ephemeral": false         // false = reply visible to the whole channel
+  }
+]</pre>
+
+      <table class="tbl">
+        <thead><tr><th data-t="cc-th1">Field</th><th data-t="cc-th2">Type</th><th data-t="cc-th3">Description</th></tr></thead>
+        <tbody>
+          <tr><td><code>name</code></td><td><code>string</code></td><td data-t="cc-r1">The slash command name (lowercase, no spaces). Users type <code>/name</code> to trigger it.</td></tr>
+          <tr><td><code>description</code></td><td><code>string</code></td><td data-t="cc-r2">Short description shown in the Discord command picker.</td></tr>
+          <tr><td><code>message</code></td><td><code>string</code></td><td data-t="cc-r3">The reply message. Supports Discord markdown. Use <code>\n</code> for line breaks.</td></tr>
+          <tr><td><code>ephemeral</code></td><td><code>bool</code></td><td data-t="cc-r4"><code>true</code> — only the user who ran the command sees the reply. <code>false</code> — visible to everyone in the channel.</td></tr>
+        </tbody>
+      </table>
+      <div class="callout tip">
+        <span class="callout-icon">✅</span>
+        <span data-t="cc-tip">Add as many commands as you need. The bot re-registers them with Discord every time it restarts.</span>
+      </div>
+      <div class="callout warn">
+        <span class="callout-icon">⚠️</span>
+        <span data-t="cc-warn">Command names must not conflict with built-in commands like <code>ban</code>, <code>play</code>, <code>ticket</code>, etc. Conflicting names will be silently overridden by the built-in handler.</span>
+      </div>
+    </section>
+
+    <!-- CHAT BRIDGE -->
+    <section class="doc-section reveal" id="chatbridge">
+      <h2 class="gradient-text" data-t="cb-h2">Chat Bridge — Discord ↔ Minecraft</h2>
+      <p data-t="cb-intro">The Chat Bridge creates a live, bidirectional link between a Discord text channel and your Minecraft server's chat. Messages sent in the Discord channel appear in Minecraft, and Minecraft chat appears in Discord — in real time, over RabbitMQ.</p>
+
+      <div class="callout info">
+        <span class="callout-icon">🌉</span>
+        <span data-t="cb-req-callout">Requires a <strong>RabbitMQ</strong> server running on your network <strong>and</strong> the <strong>OreoEssentials</strong> plugin installed on your Minecraft server.</span>
+      </div>
+
+      <h3 data-t="cb-h3how">How it works</h3>
+      <div class="grid2" style="margin:16px 0">
+        <div class="card" style="border-left:3px solid var(--b2)">
+          <h4 style="margin:0 0 8px;color:#4fa6f2" data-t="cb-dtomc">Discord → Minecraft</h4>
+          <p class="muted" style="font-size:.9rem;margin:0" data-t="cb-dtomcp">A <strong>linked</strong> Discord user sends a message in the bridge channel → OreoBot publishes a <code>CHANMSG</code> payload to the <code>chat_sync</code> RabbitMQ fanout exchange → OreoEssentials receives it and routes it to the configured Minecraft channel (e.g. <code>global</code>). The message appears in-game as <code>[Discord] PlayerName: text</code>.</p>
+        </div>
+        <div class="card" style="border-left:3px solid var(--b3)">
+          <h4 style="margin:0 0 8px;color:#4fa6f2" data-t="cb-mctod">Minecraft → Discord</h4>
+          <p class="muted" style="font-size:.9rem;margin:0" data-t="cb-mctodp">A player chats in-game → OreoEssentials publishes a <code>CHANMSG</code> payload to the <code>chat_sync</code> exchange → OreoBot receives it, resolves the player's linked Discord account (if any), and posts the message to the bridge channel as <strong>PlayerName</strong> (@mention): text.</p>
+        </div>
+      </div>
+
+      <div class="callout warn">
+        <span class="callout-icon">⚠️</span>
+        <span data-t="cb-link-warn">Only <strong>linked</strong> Discord accounts can send messages into Minecraft via the bridge. Unlinked users' messages are silently ignored in the Discord→Minecraft direction. Minecraft→Discord works for all players regardless of linking status.</span>
+      </div>
+
+      <h3 data-t="cb-h3cfg">Configuration — config.json</h3>
+<pre><button class="copy-btn" onclick="copyPre(this)">Copy</button>"chat_bridge": {
+  "enabled": true,
+  "rabbitmq_uri": "amqp://user:password@your-server:5672/%2F",
