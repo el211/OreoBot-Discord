@@ -1468,3 +1468,101 @@ rcon.password=your_password</pre>
 <pre><button class="copy-btn" onclick="copyPre(this)">Copy</button>"chat_bridge": {
   "enabled": true,
   "rabbitmq_uri": "amqp://user:password@your-server:5672/%2F",
+  "channel_id": "YOUR_DISCORD_CHANNEL_ID",   // The Discord channel used for the bridge
+  "mc_channel_id": "global",                 // OreoEssentials channel name (see table below)
+  "ban_sync": false,                          // true = Discord ban → Minecraft ban via RCON
+  "mod_sync": false                           // true = Discord /mute → Minecraft mute via RabbitMQ
+}</pre>
+
+      <table class="tbl">
+        <thead><tr><th data-t="cb-th1">Field</th><th data-t="cb-th2">Description</th></tr></thead>
+        <tbody>
+          <tr><td><code>rabbitmq_uri</code></td><td data-t="cb-f1">AMQP connection URI for your RabbitMQ server. Format: <code>amqp://user:pass@host:port/vhost</code>. The default vhost <code>%2F</code> represents <code>/</code>.</td></tr>
+          <tr><td><code>channel_id</code></td><td data-t="cb-f2">Discord channel ID where bridged messages are posted and read from. Right-click the channel → Copy Channel ID.</td></tr>
+          <tr><td><code>mc_channel_id</code></td><td data-t="cb-f3">The OreoEssentials channel name to route messages to/from. Must match a channel ID defined in OreoEssentials' <code>config.yml</code>. Set to <code>"global"</code> for the default channel. <strong>This field is required for Discord→Minecraft to work when the OreoEssentials channel system is enabled.</strong> Leaving it empty causes the bot to send legacy-format messages that OreoEssentials ignores.</td></tr>
+          <tr><td><code>ban_sync</code></td><td data-t="cb-f4">When <code>true</code>, banning a linked user from Discord automatically bans their Minecraft account via RCON (<code>ban username Banned from Discord</code>). Lifting the Discord ban also pardons them in Minecraft.</td></tr>
+          <tr><td><code>mod_sync</code></td><td data-t="cb-f5">When <code>true</code>, using <code>/mute</code> on a linked Discord user publishes a <code>CTRL;;MUTE</code> control packet to RabbitMQ. OreoEssentials' <code>MuteService</code> receives it and applies the mute in-game. <code>/unmute</code> publishes <code>CTRL;;UNMUTE</code> to lift it.</td></tr>
+        </tbody>
+      </table>
+
+      <h3 data-t="cb-h3ch">OreoEssentials Channels — <code>mc_channel_id</code> values</h3>
+      <p data-t="cb-chp">OreoEssentials' channel system separates different types of in-game chat. The <code>mc_channel_id</code> in your bot config must exactly match one of the channel IDs configured in OreoEssentials' <code>config.yml</code>. The default channels are:</p>
+
+      <table class="tbl">
+        <thead><tr><th data-t="cb-chth1">Channel ID</th><th data-t="cb-chth2">Who can see it</th><th data-t="cb-chth3">Typical use</th></tr></thead>
+        <tbody>
+          <tr><td><code>global</code> ⭐</td><td data-t="cb-ch1w">All players on all connected servers (cross-server)</td><td data-t="cb-ch1u">General chat — <strong>recommended for the bridge</strong></td></tr>
+          <tr><td><code>local</code></td><td data-t="cb-ch2w">Players within a configurable radius</td><td data-t="cb-ch2u">Proximity / area chat</td></tr>
+          <tr><td><code>trade</code></td><td data-t="cb-ch3w">All players</td><td data-t="cb-ch3u">Buying and selling</td></tr>
+          <tr><td><code>staff</code></td><td data-t="cb-ch4w">Staff-permission players only</td><td data-t="cb-ch4u">Internal staff communication</td></tr>
+          <tr><td><code>help</code></td><td data-t="cb-ch5w">All players</td><td data-t="cb-ch5u">Player questions and support</td></tr>
+          <tr><td><code>announcements</code></td><td data-t="cb-ch6w">All players (read-only for non-staff)</td><td data-t="cb-ch6u">Server announcements</td></tr>
+        </tbody>
+      </table>
+
+      <div class="callout tip">
+        <span class="callout-icon">✅</span>
+        <span data-t="cb-chtip">Set <code>mc_channel_id</code> to <code>"global"</code>. It is the default OreoEssentials channel, cross-server, and reaches every online player.</span>
+      </div>
+
+      <h3 data-t="cb-h3oe">OreoEssentials — Required <code>config.yml</code> Changes</h3>
+      <p data-t="cb-oep">For the chat bridge to work end-to-end, OreoEssentials' <code>config.yml</code> must match the bot config on two critical points:</p>
+
+<pre><button class="copy-btn" onclick="copyPre(this)">Copy</button># OreoEssentials config.yml — chat bridge relevant settings
+
+discord:
+  link_backend: "mongodb"   # MUST match minecraft.link_backend in bot config.json
+                             # "mongodb" → shared MongoDB store (works across servers)
+                             # "file"    → local JSON files (single-server only)
+
+chat_sync:
+  enabled: true
+  rabbitmq_uri: "amqp://user:password@your-server:5672/%2F"  # Identical to bot config
+
+  channels:
+    - id: "global"
+      name: "Global"
+      default: true
+      cross_server: true
+    - id: "local"
+      name: "Local"
+      radius: 100
+    - id: "trade"
+      name: "Trade"
+    - id: "staff"
+      name: "Staff"
+      staff_only: true
+    - id: "help"
+      name: "Help"
+    - id: "announcements"
+      name: "Announcements"
+
+  default_channel: "global"</pre>
+
+      <div class="callout warn">
+        <span class="callout-icon">⚠️</span>
+        <span data-t="cb-syncwarn">The <code>rabbitmq_uri</code> must be <strong>identical</strong> in the bot's <code>config.json</code> and in OreoEssentials' <code>config.yml</code>. Both sides subscribe/publish to the same <code>chat_sync</code> fanout exchange.</span>
+      </div>
+      <div class="callout warn">
+        <span class="callout-icon">⚠️</span>
+        <span data-t="cb-backendwarn"><code>discord.link_backend</code> in OreoEssentials <strong>must match</strong> <code>minecraft.link_backend</code> in the bot's <code>config.json</code>. A mismatch causes "Invalid or Expired Code" errors when players try to link their accounts — the two sides look in different data stores and can never see each other's codes.</span>
+      </div>
+
+      <h3 data-t="cb-h3ban">Ban &amp; Mod Sync</h3>
+      <div class="grid2">
+        <div class="card">
+          <h4 style="margin:0 0 8px;color:#4fa6f2" data-t="cb-bansync">Ban Sync (<code>ban_sync: true</code>)</h4>
+          <p class="muted" style="font-size:.9rem;margin:0" data-t="cb-bansyncp">When a linked user is banned from Discord, OreoBot automatically runs <code>ban &lt;username&gt; Banned from Discord</code> via RCON. Lifting the Discord ban also pardons them with <code>pardon &lt;username&gt;</code>. Requires Minecraft RCON to be configured and connected.</p>
+        </div>
+        <div class="card">
+          <h4 style="margin:0 0 8px;color:#4fa6f2" data-t="cb-modsync">Mod Sync (<code>mod_sync: true</code>)</h4>
+          <p class="muted" style="font-size:.9rem;margin:0" data-t="cb-modsyncp">When <code>/mute</code> is used on a linked Discord user, OreoBot publishes <code>CTRL;;MUTE;;DISCORD;;uuid;;expiryMs;;b64(reason);;b64(by)</code> to RabbitMQ. All connected Minecraft servers running OreoEssentials receive it and mute the player. <code>/unmute</code> publishes <code>CTRL;;UNMUTE</code> to remove it.</p>
+        </div>
+      </div>
+
+      <h3 data-t="cb-h3msg">Message Format</h3>
+      <table class="tbl">
+        <thead><tr><th data-t="cb-mth1">Direction</th><th data-t="cb-mth2">Appears as</th></tr></thead>
+        <tbody>
+          <tr><td data-t="cb-md1">Discord → Minecraft</td><td><code>[Discord] PlayerName: message text</code></td></tr>
+          <tr><td data-t="cb-md2">Minecraft → Discord</td><td><strong>PlayerName</strong> (@DiscordUser if linked): message text</td></tr>
