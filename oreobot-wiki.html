@@ -1566,3 +1566,101 @@ chat_sync:
         <tbody>
           <tr><td data-t="cb-md1">Discord → Minecraft</td><td><code>[Discord] PlayerName: message text</code></td></tr>
           <tr><td data-t="cb-md2">Minecraft → Discord</td><td><strong>PlayerName</strong> (@DiscordUser if linked): message text</td></tr>
+        </tbody>
+      </table>
+      <p class="muted" style="font-size:.9rem" data-t="cb-msgfn">The Discord @mention only appears next to the player name if the Minecraft player has a linked Discord account.</p>
+
+      <h3 data-t="cb-h3ts">Troubleshooting the Bridge</h3>
+      <div class="cmd-block">
+        <div class="cmd-name" data-t="cb-ts1t">Discord messages don't appear in Minecraft</div>
+        <ul style="margin-top:8px">
+          <li data-t="cb-ts1l1">Ensure <code>mc_channel_id</code> is set to a real OreoEssentials channel name (e.g. <code>"global"</code>) — an empty value sends legacy format which OreoEssentials ignores when its channel system is active.</li>
+          <li data-t="cb-ts1l2">Verify your Discord account is linked (<code>/mc link</code>). Only linked accounts can bridge to Minecraft.</li>
+          <li data-t="cb-ts1l3">Make sure <code>discord.link_backend</code> in OreoEssentials matches <code>minecraft.link_backend</code> in bot config.</li>
+        </ul>
+      </div>
+      <div class="cmd-block">
+        <div class="cmd-name" data-t="cb-ts2t">Minecraft messages don't appear in Discord</div>
+        <ul style="margin-top:8px">
+          <li data-t="cb-ts2l1">Check that OreoEssentials has <code>chat_sync.enabled: true</code> and the same RabbitMQ URI.</li>
+          <li data-t="cb-ts2l2">Look for <code>[ChatBridge] Sub connect error</code> in the bot logs — it retries every 5 seconds.</li>
+          <li data-t="cb-ts2l3">If OreoEssentials previously used a durable <code>chat_sync</code> exchange, delete it from RabbitMQ management and restart both sides.</li>
+        </ul>
+      </div>
+    </section>
+
+    <!-- NO-PING -->
+    <section class="doc-section reveal" id="noping">
+      <h2 class="gradient-text" data-t="np-h2">No-Ping Protection</h2>
+      <p data-t="np-p">Automatically detect and delete messages that ping a protected role, then post a warning. Useful for protecting Admin, VIP, or any sensitive role from unsolicited @mentions.</p>
+
+      <h3 data-t="np-h3cfg">Configuration</h3>
+<pre><button class="copy-btn" onclick="copyPre(this)">Copy</button>"no_ping": {
+  "enabled": true,
+  "protected_roles": ["ROLE_ID_1", "ROLE_ID_2"],   // Role IDs, NOT role names
+  "message": "{user} You are not allowed to ping **{role}**!",
+  "delete_message": true    // true = also delete the offending message
+}</pre>
+
+      <table class="tbl">
+        <thead><tr><th data-t="np-th1">Field</th><th data-t="np-th2">Description</th></tr></thead>
+        <tbody>
+          <tr><td><code>protected_roles</code></td><td data-t="np-f1">Array of <strong>role IDs</strong> (not role names) that cannot be pinged. Multiple IDs are supported. Enable Discord Developer Mode to copy role IDs.</td></tr>
+          <tr><td><code>message</code></td><td data-t="np-f2">Warning message sent to the channel when a protected role is pinged. Placeholders: <code>{user}</code> = mention of the offending user, <code>{role}</code> = name of the pinged role.</td></tr>
+          <tr><td><code>delete_message</code></td><td data-t="np-f3"><code>true</code> — the offending message is deleted before the warning is posted. <code>false</code> — only the warning is sent, the message stays.</td></tr>
+        </tbody>
+      </table>
+
+      <h3 data-t="np-h3how">How to get a Role ID</h3>
+      <div class="steps">
+        <div class="step">
+          <div class="step-num">1</div>
+          <div class="step-body">
+            <strong data-t="np-s1t">Enable Developer Mode</strong>
+            <p data-t="np-s1p">Go to Discord <strong>User Settings → Advanced</strong> → toggle on <strong>Developer Mode</strong>.</p>
+          </div>
+        </div>
+        <div class="step">
+          <div class="step-num">2</div>
+          <div class="step-body">
+            <strong data-t="np-s2t">Copy the Role ID</strong>
+            <p data-t="np-s2p">Go to <strong>Server Settings → Roles</strong> → right-click the role you want to protect → <strong>Copy Role ID</strong>. Paste it into the <code>protected_roles</code> array in your config.</p>
+          </div>
+        </div>
+      </div>
+      <div class="callout tip">
+        <span class="callout-icon">✅</span>
+        <span data-t="np-tip">You can protect as many roles as you want by adding multiple IDs to the <code>protected_roles</code> array. The bot checks all of them on every message in every channel.</span>
+      </div>
+    </section>
+
+    <!-- COUNTING GAME -->
+    <section class="doc-section reveal" id="counting">
+      <h2 class="gradient-text" data-t="cg-h2">Counting Game</h2>
+      <p data-t="cg-p">Turn a dedicated channel into a collaborative counting game. Members take turns posting the next number in sequence. Wrong numbers, repeated users, and non-number messages are all handled automatically.</p>
+
+      <h3 data-t="cg-h3cfg">Configuration</h3>
+<pre><button class="copy-btn" onclick="copyPre(this)">Copy</button>"counting_game": {
+  "enabled": true,
+  "channel_id": "YOUR_COUNTING_CHANNEL_ID",
+  "fail_resets": true,           // true = reset count to 0 on a wrong number
+  "delete_wrong": true,          // true = delete wrong-number messages automatically
+  "delete_non_numbers": true     // true = delete any non-number messages from the channel
+}</pre>
+
+      <table class="tbl">
+        <thead><tr><th data-t="cg-th1">Field</th><th data-t="cg-th2">Description</th></tr></thead>
+        <tbody>
+          <tr><td><code>channel_id</code></td><td data-t="cg-f1">The ID of the Discord channel dedicated to the counting game. Only messages in this channel are processed by the counting logic.</td></tr>
+          <tr><td><code>fail_resets</code></td><td data-t="cg-f2"><code>true</code> — the count resets back to 0 when someone sends the wrong number. <code>false</code> — wrong messages are handled (deleted / warned) but the count is not reset.</td></tr>
+          <tr><td><code>delete_wrong</code></td><td data-t="cg-f3"><code>true</code> — wrong numbers are automatically deleted to keep the channel clean.</td></tr>
+          <tr><td><code>delete_non_numbers</code></td><td data-t="cg-f4"><code>true</code> — any message that is not a valid integer is deleted. Keeps only actual counting messages in the channel.</td></tr>
+        </tbody>
+      </table>
+      <div class="callout tip">
+        <span class="callout-icon">✅</span>
+        <span data-t="cg-tip">Create a dedicated channel (e.g. <code>#counting</code>), copy its ID (right-click → Copy Channel ID), and paste it into <code>channel_id</code>. The bot starts from 1 and tracks the current count and last counter in the database.</span>
+      </div>
+      <div class="callout info">
+        <span class="callout-icon">💡</span>
+        <span data-t="cg-info">The same user cannot count two numbers in a row. The bot enforces that each consecutive number must come from a different member.</span>
