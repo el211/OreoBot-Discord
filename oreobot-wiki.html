@@ -1664,3 +1664,101 @@ chat_sync:
       <div class="callout info">
         <span class="callout-icon">💡</span>
         <span data-t="cg-info">The same user cannot count two numbers in a row. The bot enforces that each consecutive number must come from a different member.</span>
+      </div>
+    </section>
+
+    <!-- WELCOME -->
+    <section class="doc-section reveal" id="welcome">
+      <h2 class="gradient-text" data-t="wel-h2">Welcome & Leave Messages</h2>
+      <p data-t="wel-p">Automatically post an embed when someone joins or leaves your server.</p>
+
+      <h3>Placeholders</h3>
+      <table class="tbl">
+        <thead><tr><th>Placeholder</th><th>Replaced with</th></tr></thead>
+        <tbody>
+          <tr><td><code>%joined_user%</code></td><td>The member's mention (e.g. @Username)</td></tr>
+          <tr><td><code>%username%</code></td><td>The member's plain username</td></tr>
+        </tbody>
+      </table>
+
+      <h3>Thumbnail Options</h3>
+      <table class="tbl">
+        <thead><tr><th>Value</th><th>Shows</th></tr></thead>
+        <tbody>
+          <tr><td><code>"BOT"</code></td><td>The bot's profile picture</td></tr>
+          <tr><td><code>"USER"</code></td><td>The joining/leaving member's profile picture</td></tr>
+          <tr><td>Any URL</td><td>A custom image from that URL</td></tr>
+        </tbody>
+      </table>
+
+      <div class="callout info"><span class="callout-icon">💡</span><span>The <code>leave</code> block has the exact same structure as <code>welcome</code>.</span></div>
+    </section>
+
+    <!-- AUTO-MOD -->
+    <section class="doc-section reveal" id="automod">
+      <h2 class="gradient-text" data-t="am-h2">Auto-Moderation</h2>
+      <p data-t="am-p">Automatically handle common spam and abuse patterns.</p>
+
+      <table class="tbl">
+        <thead><tr><th>Rule</th><th>What it does</th></tr></thead>
+        <tbody>
+          <tr><td><code>max_mentions</code></td><td>If a message mentions more than N users, auto-mod acts</td></tr>
+          <tr><td><code>max_lines</code></td><td>If a message has more than N lines, auto-mod acts</td></tr>
+          <tr><td>Anti-spam</td><td>If a user sends more than <code>anti_spam_count</code> messages within <code>anti_spam_seconds</code> seconds, auto-mod acts</td></tr>
+        </tbody>
+      </table>
+
+      <pre><button class="copy-btn" onclick="copyPre(this)">Copy</button>"auto_mod": {
+  "enabled": true,
+  "max_mentions": 5,
+  "max_lines": 30,
+  "anti_spam_seconds": 5,
+  "anti_spam_count": 5
+}</pre>
+
+      <div class="callout tip"><span class="callout-icon">✅</span><span>Set <code>enabled: false</code> to turn off auto-moderation entirely.</span></div>
+    </section>
+
+    <!-- DATABASE -->
+    <section class="doc-section reveal" id="database">
+      <h2 class="gradient-text" data-t="db-h2">Database & Storage</h2>
+
+      <div class="grid2">
+        <div class="card">
+          <h4 style="color:#4fa6f2;margin:0 0 8px">Guild State</h4>
+          <p class="muted" style="font-size:.9rem;margin:0">Saved to <code>data/guilds/{guild_id}.json</code>. Contains warnings, auto-role config, role menus, giveaways, and ticket runtime state. Created automatically.</p>
+        </div>
+        <div class="card">
+          <h4 style="color:#4fa6f2;margin:0 0 8px">SQLite (default)</h4>
+          <p class="muted" style="font-size:.9rem;margin:0">Creates <code>data/bot.db</code> automatically. No extra setup needed. Best for most use cases.</p>
+        </div>
+        <div class="card">
+          <h4 style="color:#4fa6f2;margin:0 0 8px">MongoDB</h4>
+          <p class="muted" style="font-size:.9rem;margin:0">Set <code>database.driver</code> to <code>"mongodb"</code> and fill in your URI. Used for warnings and moderation cases.</p>
+        </div>
+        <div class="card">
+          <h4 style="color:#4fa6f2;margin:0 0 8px">Minecraft Links</h4>
+          <p class="muted" style="font-size:.9rem;margin:0">Stored in <code>data/mc_links/</code> as JSON by default. Set <code>minecraft.link_backend</code> to <code>"mongodb"</code> to use MongoDB instead.</p>
+        </div>
+      </div>
+    </section>
+
+    <!-- TROUBLESHOOTING -->
+    <section class="doc-section reveal" id="troubleshooting">
+      <h2 class="gradient-text" data-t="ts-h2">Troubleshooting</h2>
+
+      <div class="cmd-block">
+        <div class="cmd-name">Slash commands aren't showing up</div>
+        <ul style="margin-top:8px">
+          <li>Commands can take up to <strong>1 hour</strong> to appear globally</li>
+          <li>Set <code>guild_id</code> in config.json to your server ID for instant registration</li>
+          <li>Make sure the bot has the <code>applications.commands</code> scope when invited</li>
+        </ul>
+      </div>
+
+      <div class="cmd-block">
+        <div class="cmd-name">Bot can't assign roles</div>
+        <ul style="margin-top:8px">
+          <li>The bot's role must be <strong>above</strong> the target role in Server Settings → Roles</li>
+          <li>Use <code>/joinrole check</code> to diagnose auto-role issues</li>
+        </ul>
