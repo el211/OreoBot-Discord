@@ -1762,3 +1762,101 @@ chat_sync:
           <li>The bot's role must be <strong>above</strong> the target role in Server Settings → Roles</li>
           <li>Use <code>/joinrole check</code> to diagnose auto-role issues</li>
         </ul>
+      </div>
+
+      <div class="cmd-block">
+        <div class="cmd-name">Music isn't working</div>
+        <ul style="margin-top:8px">
+          <li>Check that <code>music.enabled</code> is <code>true</code> in config.json</li>
+          <li><strong>Direct backend:</strong> verify <code>yt-dlp</code> and <code>ffmpeg</code> are installed and paths are correct</li>
+          <li><strong>Lavalink backend:</strong> make sure your Lavalink server is running and credentials match</li>
+          <li>You must be in a voice channel before using <code>/play</code></li>
+        </ul>
+      </div>
+
+      <div class="cmd-block">
+        <div class="cmd-name">Minecraft: "RCON not initialized"</div>
+        <ul style="margin-top:8px">
+          <li>Check that <code>minecraft.enabled</code> is <code>true</code></li>
+          <li>Verify <code>rcon_ip</code>, <code>rcon_port</code>, and <code>rcon_password</code> are correct</li>
+          <li>Make sure <code>enable-rcon=true</code> is set in <code>server.properties</code></li>
+          <li>Check that the RCON port is not blocked by a firewall</li>
+        </ul>
+      </div>
+
+      <div class="cmd-block">
+        <div class="cmd-name">Ticket panel won't post</div>
+        <ul style="margin-top:8px">
+          <li>Make sure <code>tickets.enabled</code> is <code>true</code></li>
+          <li>Make sure <code>panel_channel</code> is set to a valid channel ID</li>
+          <li>Make sure at least one category is configured</li>
+          <li>Run <code>/ticket panel</code> after any configuration changes</li>
+        </ul>
+      </div>
+
+      <div class="cmd-block">
+        <div class="cmd-name">"No permission" errors</div>
+        <ul style="margin-top:8px">
+          <li>Role names in <code>permissions.admin_roles</code> / <code>permissions.moderator_roles</code> must <strong>exactly match</strong> Discord role names (case-sensitive)</li>
+          <li>Easiest fix: give the bot the <strong>Administrator</strong> permission</li>
+        </ul>
+      </div>
+
+      <div class="callout info" style="margin-top:16px">
+        <span class="callout-icon">💡</span>
+        <span>Giveaway timers are automatically restored on bot restart. If a giveaway ended while the bot was offline, winners will be picked when it comes back online.</span>
+      </div>
+    </section>
+
+  </main>
+</div>
+
+<footer class="footer">
+  <p>© <span id="y"></span> OreoStudios — All rights reserved.</p>
+  <p class="muted" style="font-size:.85rem" data-t="footer-2">OreoBot documentation • Built with ❤️ by the OreoStudios team</p>
+</footer>
+
+<script>
+(() => {
+  // Year
+  const y = document.getElementById("y");
+  if (y) y.textContent = new Date().getFullYear();
+
+  // Mobile sidebar toggle
+  const sidebar = document.getElementById("sidebar");
+  const overlay = document.getElementById("overlay");
+  const menuBtn = document.getElementById("menu");
+
+  const openSidebar = () => {
+    sidebar.classList.add("open");
+    overlay.classList.add("open");
+    document.body.classList.add("no-scroll");
+    menuBtn.setAttribute("aria-expanded","true");
+  };
+  const closeSidebar = () => {
+    sidebar.classList.remove("open");
+    overlay.classList.remove("open");
+    document.body.classList.remove("no-scroll");
+    menuBtn.setAttribute("aria-expanded","false");
+  };
+
+  menuBtn && menuBtn.addEventListener("click", () =>
+    sidebar.classList.contains("open") ? closeSidebar() : openSidebar()
+  );
+  overlay && overlay.addEventListener("click", closeSidebar);
+
+  // Sidebar smooth scroll + active link
+  document.querySelectorAll(".sidebar-link").forEach(link => {
+    link.addEventListener("click", (e) => {
+      e.preventDefault();
+      const target = document.querySelector(link.getAttribute("href"));
+      if (target) target.scrollIntoView({ behavior: "smooth", block: "start" });
+      if (window.innerWidth <= 860) closeSidebar();
+    });
+  });
+
+  // Active sidebar tracking
+  const sections = document.querySelectorAll(".doc-section, .wiki-hero");
+  const links = document.querySelectorAll(".sidebar-link");
+
+  const observer = new IntersectionObserver((entries) => {
