@@ -1860,3 +1860,101 @@ chat_sync:
   const links = document.querySelectorAll(".sidebar-link");
 
   const observer = new IntersectionObserver((entries) => {
+    entries.forEach(entry => {
+      if (entry.isIntersecting) {
+        const id = entry.target.id;
+        links.forEach(l => {
+          l.classList.toggle("active", l.getAttribute("href") === "#" + id);
+        });
+      }
+    });
+  }, { rootMargin: "-20% 0px -60% 0px", threshold: 0 });
+
+  sections.forEach(s => observer.observe(s));
+
+  // Scroll progress bar
+  const progress = document.getElementById("progress");
+  window.addEventListener("scroll", () => {
+    if (!progress) return;
+    const total = document.body.scrollHeight - window.innerHeight;
+    const pct = (window.scrollY / total) * 100;
+    progress.style.height = pct + "%";
+  }, { passive: true });
+
+  // Reveal on scroll
+  const reveals = document.querySelectorAll(".reveal");
+  if ("IntersectionObserver" in window) {
+    const io = new IntersectionObserver((entries) => {
+      entries.forEach(entry => {
+        if (entry.isIntersecting) {
+          entry.target.classList.add("show");
+          io.unobserve(entry.target);
+        }
+      });
+    }, { rootMargin: "0px 0px -8% 0px", threshold: 0.05 });
+    reveals.forEach(el => io.observe(el));
+  } else {
+    reveals.forEach(el => el.classList.add("show"));
+  }
+
+  // Copy button
+  window.copyPre = (btn) => {
+    const pre = btn.parentElement;
+    const text = pre.textContent.replace("Copy","").replace("Copié!","").replace("Copied!","").trim();
+    navigator.clipboard.writeText(text).then(() => {
+      btn.textContent = "Copied!";
+      setTimeout(() => btn.textContent = "Copy", 1800);
+    });
+  };
+
+  // ============================================================
+  // TRANSLATION SYSTEM — fully hardcoded FR, zero API calls
+  // Strategy: every translatable element has a data-en + data-fr
+  // attribute. On toggle we walk all [data-fr] elements and swap.
+  // ============================================================
+  let currentLang = 'en';
+
+  // All translations hardcoded: selector → { en, fr }
+  // We tag each element with data-t="key" in the HTML, then this
+  // map drives the swap. Simpler: we just store both versions on
+  // the element via data attributes added by the init function below.
+
+  const TRANSLATIONS = {
+    // ---- SIDEBAR ----
+    'sl-start':    { en: 'Getting Started',    fr: 'Démarrage' },
+    'sl-config':   { en: 'Configuration',      fr: 'Configuration' },
+    'sl-commands': { en: 'Commands',            fr: 'Commandes' },
+    'sl-features': { en: 'Features',            fr: 'Fonctionnalités' },
+    'sl-overview': { en: ' Overview',           fr: ' Aperçu' },
+    'sl-req':      { en: ' Requirements',       fr: ' Prérequis' },
+    'sl-setup':    { en: ' First-Time Setup',   fr: ' Configuration initiale' },
+    'sl-running':  { en: ' Running the Bot',    fr: ' Lancer le bot' },
+    'sl-cfgjson':  { en: ' config.json',        fr: ' config.json' },
+    'sl-lang':     { en: ' lang.yml',           fr: ' lang.yml' },
+    'sl-perms':    { en: ' Permissions',        fr: ' Permissions' },
+    'sl-mod':      { en: ' Moderation',         fr: ' Modération' },
+    'sl-tickets':  { en: ' Tickets',            fr: ' Tickets' },
+    'sl-autorole': { en: ' Auto-Role',          fr: ' Rôle auto' },
+    'sl-rolemenu': { en: ' Role Menus',         fr: ' Menus de rôles' },
+    'sl-givea':    { en: ' Giveaways',          fr: ' Concours' },
+    'sl-music':    { en: ' Music',              fr: ' Musique' },
+    'sl-mc':       { en: ' Minecraft',          fr: ' Minecraft' },
+    'sl-oe':       { en: ' OreoEssentials',     fr: ' OreoEssentials' },
+    'sl-util':     { en: ' Utility',            fr: ' Utilitaires' },
+    'sl-welcome':  { en: ' Welcome & Leave',    fr: ' Arrivée & Départ' },
+    'sl-automod':  { en: ' Auto-Moderation',    fr: ' Auto-Modération' },
+    'sl-chatbridge':{ en: ' Chat Bridge',       fr: ' Pont de chat' },
+    'sl-noping':   { en: ' No-Ping',            fr: ' Anti-ping' },
+    'sl-counting': { en: ' Counting Game',      fr: ' Jeu de comptage' },
+    'sl-customcmds':{ en: ' Custom Commands',   fr: ' Commandes personnalisées' },
+    'sl-db':       { en: ' Database',           fr: ' Base de données' },
+    'sl-trouble':  { en: ' Troubleshooting',    fr: ' Dépannage' },
+
+    // ---- HERO ----
+    'hero-tag':  { en: '📖 Official Documentation', fr: '📖 Documentation officielle' },
+    'hero-desc': { en: 'A feature-rich Discord bot written in Go. This guide covers everything from first-time setup to every command available.', fr: 'Un bot Discord complet écrit en Go. Ce guide couvre tout, de la première configuration à chaque commande disponible.' },
+    'hero-b2':   { en: 'Slash Commands',   fr: 'Commandes slash' },
+
+    // ---- REQUIREMENTS ----
+    'req-h2':  { en: 'Requirements', fr: 'Prérequis' },
+    'req-p':   { en: 'Before running OreoBot, make sure you have the following installed and configured:', fr: 'Avant de lancer OreoBot, assurez-vous d\'avoir installé et configuré les éléments suivants :' },
