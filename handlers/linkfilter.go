@@ -95,3 +95,102 @@ func (h *Handler) handleLinkFilterMessage(s *discordgo.Session, m *discordgo.Mes
 	if m.Author == nil || m.Author.Bot || m.GuildID == "" || m.Content == "" {
 		return
 	}
+
+	gs := storage.GetGuild(m.GuildID)
+
+	// Members with an allowed role may post anything.
+	allowedRoles := config.MergedLinkFilterAllowedRoles(h.cfg, gs)
+	if len(allowedRoles) > 0 {
+		roleSet := make(map[string]bool, len(allowedRoles))
+		for _, id := range allowedRoles {
+			roleSet[strings.TrimSpace(id)] = true
+		}
+		var roles []string
+		if m.Member != nil {
+			roles = m.Member.Roles
+		} else if member, err := s.GuildMember(m.GuildID, m.Author.ID); err == nil {
+			roles = member.Roles
+		}
+		for _, rid := range roles {
+			if roleSet[rid] {
+				return
+			}
+		}
+	}
+
+	// Members who can manage messages (mods/admins) are exempt.
+	if perms, err := s.State.MessagePermissions(m.Message); err == nil {
+		if perms&discordgo.PermissionManageMessages != 0 || perms&discordgo.PermissionAdministrator != 0 {
+			return
+		}
+	}
+
+	whitelist := config.MergedLinkFilterWhitelist(h.cfg, gs)
+	blocked, sample := findBlockedLink(m.Content, whitelist, h.cfg.LinkFilter.BlockInvites)
+	if !blocked {
+		return
+	}
+
+	if h.cfg.LinkFilter.DeleteMessage {
+		_ = s.ChannelMessageDelete(m.ChannelID, m.ID)
+	}
+
+	warn := config.EffectiveLinkFilterMessage(h.cfg, gs)
+	warn = strings.ReplaceAll(warn, "{user}", "<@"+m.Author.ID+">")
+	sendTemp(s, m.ChannelID, warn, 8)
+
+	logLinkFilter(s, m.Message, sample)
+}
+
+// findBlockedLink reports whether content contains a link that is not permitted.
+// A link is permitted only if its host matches a whitelisted domain. Discord
+// invites are always blocked when blockInvites is true, regardless of whitelist.
+func findBlockedLink(content string, whitelist []string, blockInvites bool) (bool, string) {
+	if blockInvites {
+		if inv := inviteRe.FindString(content); inv != "" {
+			return true, inv
+		}
+	}
+
+	wl := make([]string, 0, len(whitelist))
+	for _, d := range whitelist {
+		if n := normalizeDomain(d); n != "" {
+			wl = append(wl, n)
+		}
+	}
+
+	for _, match := range urlRe.FindAllString(content, -1) {
+		host := extractHost(match)
+		if host == "" {
+			continue
+		}
+		if !hostWhitelisted(host, wl) {
+			return true, match
+		}
+	}
+	return false, ""
+}
+
+// extractHost pulls the lowercase host out of a raw URL/domain token.
+func extractHost(raw string) string {
+	s := strings.ToLower(strings.TrimSpace(raw))
+	if i := strings.Index(s, "://"); i != -1 {
+		s = s[i+3:]
+	}
+	if i := strings.IndexAny(s, "/?#"); i != -1 {
+		s = s[:i]
+	}
+	if i := strings.Index(s, "@"); i != -1 {
+		s = s[i+1:]
+	}
+	if i := strings.Index(s, ":"); i != -1 {
+		s = s[:i]
+	}
+	s = strings.TrimPrefix(s, "www.")
+	return strings.Trim(s, ".")
+}
+
+// normalizeDomain reduces a whitelist entry to a bare lowercase host.
+func normalizeDomain(d string) string {
+	return extractHost(d)
+}
