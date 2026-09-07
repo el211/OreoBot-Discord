@@ -194,3 +194,101 @@ func extractHost(raw string) string {
 func normalizeDomain(d string) string {
 	return extractHost(d)
 }
+
+// hostWhitelisted returns true if host equals or is a subdomain of any entry.
+func hostWhitelisted(host string, whitelist []string) bool {
+	for _, w := range whitelist {
+		if host == w || strings.HasSuffix(host, "."+w) {
+			return true
+		}
+	}
+	return false
+}
+
+func logLinkFilter(s *discordgo.Session, m *discordgo.Message, link string) {
+	gs := storage.GetGuild(m.GuildID)
+	logCh := config.EffectiveModLogChannel(storage.Cfg, gs)
+	if logCh == "" {
+		return
+	}
+
+	content := m.Content
+	if len(content) > 1024 {
+		content = content[:1021] + "..."
+	}
+
+	embed := &discordgo.MessageEmbed{
+		Title: "Link Filter: Message Deleted",
+		Color: 0xFFA500,
+		Fields: []*discordgo.MessageEmbedField{
+			{Name: "Author", Value: fmt.Sprintf("<@%s> - %s (`%s`)", m.Author.ID, m.Author.Username, m.Author.ID)},
+			{Name: "Channel", Value: fmt.Sprintf("<#%s>", m.ChannelID), Inline: true},
+			{Name: "Blocked Link", Value: link, Inline: true},
+			{Name: "Message Content", Value: content},
+		},
+		Footer:    &discordgo.MessageEmbedFooter{Text: fmt.Sprintf("Message ID: %s", m.ID)},
+		Timestamp: time.Now().Format(time.RFC3339),
+	}
+	_, _ = s.ChannelMessageSendEmbed(logCh, embed)
+}
+
+// ──────────────────────────────────────────
+// /linkfilter command
+// ──────────────────────────────────────────
+
+func (h *Handler) handleLinkFilterCommand(s *discordgo.Session, i *discordgo.InteractionCreate) {
+	if !h.isAdmin(s, i) {
+		respond(s, i, "You do not have permission to use this command.", true)
+		return
+	}
+
+	data := i.ApplicationCommandData()
+	if len(data.Options) == 0 {
+		respond(s, i, "Use `/linkfilter adddomain`, `removedomain`, `addrole`, `removerole`, or `list`.", true)
+		return
+	}
+
+	sub := data.Options[0]
+	om := subOptMap(sub.Options)
+	gs := storage.GetGuild(i.GuildID)
+
+	switch sub.Name {
+	case "adddomain":
+		domain := normalizeDomain(om["domain"].StringValue())
+		if domain == "" {
+			respond(s, i, "That doesn't look like a valid domain.", true)
+			return
+		}
+		gs.Lock()
+		if containsStr(gs.LinkFilter.ExtraWhitelistDomains, domain) {
+			gs.Unlock()
+			respond(s, i, fmt.Sprintf("`%s` is already whitelisted.", domain), true)
+			return
+		}
+		gs.LinkFilter.ExtraWhitelistDomains = append(gs.LinkFilter.ExtraWhitelistDomains, domain)
+		gs.Unlock()
+		_ = gs.Save()
+		respond(s, i, fmt.Sprintf("✅ Links to `%s` are now allowed for everyone.", domain), true)
+
+	case "removedomain":
+		domain := normalizeDomain(om["domain"].StringValue())
+		gs.Lock()
+		before := len(gs.LinkFilter.ExtraWhitelistDomains)
+		gs.LinkFilter.ExtraWhitelistDomains = removeStr(gs.LinkFilter.ExtraWhitelistDomains, domain)
+		removed := len(gs.LinkFilter.ExtraWhitelistDomains) != before
+		gs.Unlock()
+		if !removed {
+			respond(s, i, fmt.Sprintf("`%s` was not in the runtime whitelist. (Domains set in config.json must be removed there.)", domain), true)
+			return
+		}
+		_ = gs.Save()
+		respond(s, i, fmt.Sprintf("✅ Removed `%s` from the whitelist.", domain), true)
+
+	case "addrole":
+		role := om["role"].RoleValue(s, i.GuildID)
+		gs.Lock()
+		if containsStr(gs.LinkFilter.ExtraAllowedRoles, role.ID) {
+			gs.Unlock()
+			respond(s, i, fmt.Sprintf("<@&%s> is already allowed to post links.", role.ID), true)
+			return
+		}
