@@ -292,3 +292,90 @@ func (h *Handler) handleLinkFilterCommand(s *discordgo.Session, i *discordgo.Int
 			respond(s, i, fmt.Sprintf("<@&%s> is already allowed to post links.", role.ID), true)
 			return
 		}
+		gs.LinkFilter.ExtraAllowedRoles = append(gs.LinkFilter.ExtraAllowedRoles, role.ID)
+		gs.Unlock()
+		_ = gs.Save()
+		respond(s, i, fmt.Sprintf("✅ <@&%s> can now post links freely.", role.ID), true)
+
+	case "removerole":
+		role := om["role"].RoleValue(s, i.GuildID)
+		gs.Lock()
+		before := len(gs.LinkFilter.ExtraAllowedRoles)
+		gs.LinkFilter.ExtraAllowedRoles = removeStr(gs.LinkFilter.ExtraAllowedRoles, role.ID)
+		removed := len(gs.LinkFilter.ExtraAllowedRoles) != before
+		gs.Unlock()
+		if !removed {
+			respond(s, i, fmt.Sprintf("<@&%s> was not in the runtime allowed-roles list. (Roles set in config.json must be removed there.)", role.ID), true)
+			return
+		}
+		_ = gs.Save()
+		respond(s, i, fmt.Sprintf("✅ <@&%s> can no longer post links.", role.ID), true)
+
+	case "message":
+		text := ""
+		if o, ok := om["text"]; ok {
+			text = strings.TrimSpace(o.StringValue())
+		}
+		gs.Lock()
+		gs.LinkFilter.MessageOverride = text
+		gs.Unlock()
+		_ = gs.Save()
+		if text == "" {
+			respond(s, i, "✅ Reset the warning message to the default.", true)
+			return
+		}
+		preview := strings.ReplaceAll(text, "{user}", "<@"+i.Member.User.ID+">")
+		respond(s, i, fmt.Sprintf("✅ Warning message updated. Preview:\n%s", preview), true)
+
+	case "list":
+		handleLinkFilterList(s, i, h.cfg, gs)
+
+	default:
+		respond(s, i, "Unknown linkfilter subcommand.", true)
+	}
+}
+
+func handleLinkFilterList(s *discordgo.Session, i *discordgo.InteractionCreate, cfg *config.Config, gs *config.GuildState) {
+	roles := config.MergedLinkFilterAllowedRoles(cfg, gs)
+	domains := config.MergedLinkFilterWhitelist(cfg, gs)
+	sort.Strings(domains)
+
+	var sb strings.Builder
+	sb.WriteString("**Link Filter**\n\n**Allowed roles:**\n")
+	if len(roles) == 0 {
+		sb.WriteString("*(none — nobody is exempt except admins/mods)*\n")
+	} else {
+		for _, r := range roles {
+			sb.WriteString(fmt.Sprintf("• <@&%s>\n", r))
+		}
+	}
+	sb.WriteString("\n**Whitelisted domains:**\n")
+	if len(domains) == 0 {
+		sb.WriteString("*(none)*\n")
+	} else {
+		for _, d := range domains {
+			sb.WriteString(fmt.Sprintf("• `%s`\n", d))
+		}
+	}
+	sb.WriteString(fmt.Sprintf("\n**Warning message:**\n%s", config.EffectiveLinkFilterMessage(cfg, gs)))
+	respond(s, i, sb.String(), true)
+}
+
+func containsStr(list []string, v string) bool {
+	for _, x := range list {
+		if x == v {
+			return true
+		}
+	}
+	return false
+}
+
+func removeStr(list []string, v string) []string {
+	out := list[:0]
+	for _, x := range list {
+		if x != v {
+			out = append(out, x)
+		}
+	}
+	return out
+}
