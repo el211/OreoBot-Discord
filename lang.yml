@@ -281,6 +281,7 @@ en:
   invoice_legal_title:        "Legal notice"
   invoice_legal_body:         "This invoice is legally issued by:\n{entity}"
   invoice_cancelled_notice:   "🚫 Invoice `{number}` for {user} has been **cancelled and voided**. It is no longer payable."
+  invoice_cancelled_banner:   "🚫 CANCELLED — this invoice has been voided and is no longer payable."
 
   # ── Commissions panel / ticket ───────────────────────────
   commission_panel_title:       "📋 Commissions"
@@ -581,6 +582,7 @@ fr:
   invoice_legal_title:        "Mentions légales"
   invoice_legal_body:         "Cette facture est légalement émise par :\n{entity}"
   invoice_cancelled_notice:   "🚫 La facture `{number}` pour {user} a été **annulée et invalidée**. Elle n'est plus payable."
+  invoice_cancelled_banner:   "🚫 ANNULÉE — cette facture a été invalidée et n'est plus payable."
 
   # ── Panneau / ticket de commande ─────────────────────────
   commission_panel_title:       "📋 Commandes"

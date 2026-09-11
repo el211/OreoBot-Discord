@@ -459,6 +459,7 @@ type CommissionQuote struct {
 type CommissionInvoice struct {
 	Number      int     `json:"number"`
 	ChannelID   string  `json:"channel_id"`
+	MessageID   string  `json:"message_id,omitempty"`
 	GuildID     string  `json:"guild_id"`
 	ClientID    string  `json:"client_id"`
 	CreatedBy   string  `json:"created_by"`

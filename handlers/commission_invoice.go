@@ -280,13 +280,15 @@ func handleInvoiceCreate(s *discordgo.Session, i *discordgo.InteractionCreate, o
 	}
 	gatewayButtons = append(gatewayButtons, languageButtons(invNum)...)
 	send := buildInvoiceSend(fmt.Sprintf("<@%s>", client.ID), embed, gatewayButtons)
-	if _, err := s.ChannelMessageSendComplex(i.ChannelID, send); err != nil {
+	sent, err := s.ChannelMessageSendComplex(i.ChannelID, send)
+	if err != nil {
 		_, _ = s.FollowupMessageCreate(i.Interaction, true, &discordgo.WebhookParams{
 			Content: fmt.Sprintf("❌ Failed to post invoice: %s", err.Error()),
 			Flags:   discordgo.MessageFlagsEphemeral,
 		})
 		return
 	}
+	storeInvoiceMessageID(gs, invNum, sent.ID)
 
 	confirmMsg := fmt.Sprintf("✅ Invoice `INV-%04d` posted for <@%s> — **%.2f %s**.", invNum, client.ID, amount, currency)
 	if len(gatewayErrs) > 0 {
@@ -332,6 +334,20 @@ func handleInvoiceList(s *discordgo.Session, i *discordgo.InteractionCreate) {
 	respond(s, i, sb.String(), true)
 }
 
+// storeInvoiceMessageID records the posted message id on the stored invoice so it
+// can be edited later (e.g. on cancellation).
+func storeInvoiceMessageID(gs *config.GuildState, num int, msgID string) {
+	gs.Lock()
+	for j := range gs.CommissionsRuntime.Invoices {
+		if gs.CommissionsRuntime.Invoices[j].Number == num {
+			gs.CommissionsRuntime.Invoices[j].MessageID = msgID
+			break
+		}
+	}
+	gs.Unlock()
+	_ = gs.Save()
+}
+
 func handleInvoiceCancel(s *discordgo.Session, i *discordgo.InteractionCreate, opts []*discordgo.ApplicationCommandInteractionDataOption) {
 	om := subOptMap(opts)
 	client := om["client"].UserValue(s)
@@ -375,6 +391,22 @@ func handleInvoiceCancel(s *discordgo.Session, i *discordgo.InteractionCreate, o
 	var gwErrs []error
 	if payments.Svc != nil {
 		gwErrs = payments.Svc.CancelInvoice(invCopy)
+	}
+
+	// Edit the original invoice message: mark it cancelled and strip the buttons.
+	if invCopy.ChannelID != "" && invCopy.MessageID != "" {
+		code := lang.ActiveLanguage()
+		cancelledEmbed := renderInvoiceEmbed(storage.Cfg, invCopy, code)
+		cancelledEmbed.Color = 0xED4245
+		cancelledEmbed.Title = "🚫 " + cancelledEmbed.Title
+		cancelledEmbed.Description = "**" + lang.T("invoice_cancelled_banner") + "**\n\n" + cancelledEmbed.Description
+		noButtons := []discordgo.MessageComponent{}
+		_, _ = s.ChannelMessageEditComplex(&discordgo.MessageEdit{
+			Channel:    invCopy.ChannelID,
+			ID:         invCopy.MessageID,
+			Embeds:     &[]*discordgo.MessageEmbed{cancelledEmbed},
+			Components: &noButtons,
+		})
 	}
 
 	if invCopy.ChannelID != "" {
@@ -565,13 +597,15 @@ func handleCommissionInvoiceModalSubmit(s *discordgo.Session, i *discordgo.Inter
 	}
 	gatewayButtons = append(gatewayButtons, languageButtons(invNum)...)
 	send := buildInvoiceSend(fmt.Sprintf("<@%s>", ct.UserID), embed, gatewayButtons)
-	if _, err := s.ChannelMessageSendComplex(channelID, send); err != nil {
+	sent, err := s.ChannelMessageSendComplex(channelID, send)
+	if err != nil {
 		_, _ = s.FollowupMessageCreate(i.Interaction, true, &discordgo.WebhookParams{
 			Content: fmt.Sprintf("❌ Failed to post invoice: %s", err.Error()),
 			Flags:   discordgo.MessageFlagsEphemeral,
 		})
 		return
 	}
+	storeInvoiceMessageID(gs, invNum, sent.ID)
 
 	confirmMsg := fmt.Sprintf("✅ Invoice `INV-%04d` posted — **%.2f %s** for <@%s>.", invNum, amount, currency, ct.UserID)
 	if len(gatewayErrs) > 0 {
