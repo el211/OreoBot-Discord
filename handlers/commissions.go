@@ -276,7 +276,7 @@ func handleCommissionPanel(s *discordgo.Session, i *discordgo.InteractionCreate)
 	oldMsgID := gs.CommissionsRuntime.PanelMessageID
 	gs.Unlock()
 
-	embed := buildCommissionPanelEmbed(gs, services, enabled)
+	embed := renderCommissionPanelEmbed(s, gs, services, enabled, lang.ActiveLanguage())
 
 	msg, err := s.ChannelMessageSendComplex(panelCh, &discordgo.MessageSend{
 		Embeds:     []*discordgo.MessageEmbed{embed},
@@ -333,19 +333,44 @@ func handleCommissionPanelLang(s *discordgo.Session, i *discordgo.InteractionCre
 	_ = s.InteractionRespond(i.Interaction, &discordgo.InteractionResponse{
 		Type: discordgo.InteractionResponseChannelMessageWithSource,
 		Data: &discordgo.InteractionResponseData{
-			Embeds:     []*discordgo.MessageEmbed{renderCommissionPanelEmbed(gs, services, enabled, code)},
+			Embeds:     []*discordgo.MessageEmbed{renderCommissionPanelEmbed(s, gs, services, enabled, code)},
 			Components: commissionPanelComponents(enabled, code),
 			Flags:      discordgo.MessageFlagsEphemeral,
 		},
 	})
 }
 
-func buildCommissionPanelEmbed(gs *config.GuildState, services []config.CommissionService, enabled bool) *discordgo.MessageEmbed {
-	return renderCommissionPanelEmbed(gs, services, enabled, lang.ActiveLanguage())
+// resolveEmojiShortcode converts a ":name:" custom-emoji shortcode into the full
+// "<:name:id>" form that renders in bot embeds, by looking it up in the guild's
+// emojis. Unicode emojis and already-full custom emojis are returned unchanged.
+func resolveEmojiShortcode(s *discordgo.Session, guildID, emoji string) string {
+	e := strings.TrimSpace(emoji)
+	if len(e) < 3 || !strings.HasPrefix(e, ":") || !strings.HasSuffix(e, ":") {
+		return emoji
+	}
+	name := strings.Trim(e, ":")
+	g, err := s.State.Guild(guildID)
+	if err != nil || g == nil || len(g.Emojis) == 0 {
+		if fetched, ferr := s.Guild(guildID); ferr == nil && fetched != nil {
+			g = fetched
+		}
+	}
+	if g == nil {
+		return emoji
+	}
+	for _, ge := range g.Emojis {
+		if strings.EqualFold(ge.Name, name) {
+			if ge.Animated {
+				return "<a:" + ge.Name + ":" + ge.ID + ">"
+			}
+			return "<:" + ge.Name + ":" + ge.ID + ">"
+		}
+	}
+	return emoji
 }
 
 // renderCommissionPanelEmbed builds the commission panel embed in a given language.
-func renderCommissionPanelEmbed(gs *config.GuildState, services []config.CommissionService, enabled bool, code string) *discordgo.MessageEmbed {
+func renderCommissionPanelEmbed(s *discordgo.Session, gs *config.GuildState, services []config.CommissionService, enabled bool, code string) *discordgo.MessageEmbed {
 	cfg := storage.Cfg
 
 	statusLine := lang.TL(code, "commission_status_open")
@@ -362,7 +387,8 @@ func renderCommissionPanelEmbed(gs *config.GuildState, services []config.Commiss
 		desc.WriteString(lang.TL(code, "commission_available_services") + "\n")
 		desc.WriteString("━━━━━━━━━━━━━━━━━━━━━━\n\n")
 		for _, svc := range services {
-			desc.WriteString(fmt.Sprintf("%s **%s**\n", svc.Emoji, svc.Name))
+			emoji := resolveEmojiShortcode(s, gs.GuildID, svc.Emoji)
+			desc.WriteString(fmt.Sprintf("%s **%s**\n", emoji, svc.Name))
 			desc.WriteString(fmt.Sprintf("┃ %s\n", svc.Description))
 			if svc.StartingPrice != "" {
 				desc.WriteString(fmt.Sprintf("┃ 💰 %s\n", svc.StartingPrice))

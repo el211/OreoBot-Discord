@@ -321,7 +321,7 @@ func createCommissionChannel(
 
 	serviceDisplay := serviceName
 	if serviceEmoji != "" {
-		serviceDisplay = serviceEmoji + " " + serviceName
+		serviceDisplay = resolveEmojiShortcode(s, i.GuildID, serviceEmoji) + " " + serviceName
 	}
 
 	notesField := "*None provided*"
