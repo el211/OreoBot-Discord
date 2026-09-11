@@ -214,6 +214,14 @@ func handleComponent(s *discordgo.Session, i *discordgo.InteractionCreate) {
 		handleInvoiceLangButton(s, i)
 		return
 	}
+	if strings.HasPrefix(customID, "commission_panel_lang:") {
+		handleCommissionPanelLang(s, i)
+		return
+	}
+	if strings.HasPrefix(customID, "commission_ticket_lang:") {
+		handleCommissionTicketLang(s, i)
+		return
+	}
 	if strings.HasPrefix(customID, "commission_quote_btn:") {
 		handleCommissionQuoteButton(s, i)
 		return

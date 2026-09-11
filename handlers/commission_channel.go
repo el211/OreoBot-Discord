@@ -7,10 +7,59 @@ import (
 	"time"
 
 	"discord-bot/config"
+	"discord-bot/lang"
 	"discord-bot/storage"
 
 	"github.com/bwmarrin/discordgo"
 )
+
+// renderCommissionTicketEmbed builds the client-facing commission ticket embed
+// from a stored ticket in a given language.
+func renderCommissionTicketEmbed(ct config.CommissionTicket, code string) *discordgo.MessageEmbed {
+	notes := ct.Notes
+	if strings.TrimSpace(notes) == "" {
+		notes = lang.TL(code, "commission_notes_none")
+	}
+	created := time.Now()
+	if t, err := time.Parse(time.RFC3339, ct.CreatedAt); err == nil {
+		created = t
+	}
+	return &discordgo.MessageEmbed{
+		Title: lang.TL(code, "commission_ticket_title", "number", fmt.Sprintf("%04d", ct.Number)),
+		Color: 0x5865F2,
+		Fields: []*discordgo.MessageEmbedField{
+			{Name: lang.TL(code, "commission_field_client"), Value: fmt.Sprintf("<@%s>", ct.UserID), Inline: true},
+			{Name: lang.TL(code, "commission_field_service"), Value: safeEmbedValue(ct.ServiceName), Inline: true},
+			{Name: lang.TL(code, "commission_field_budget"), Value: safeEmbedValue(ct.Budget), Inline: true},
+			{Name: lang.TL(code, "commission_field_timeline"), Value: safeEmbedValue(ct.Timeline), Inline: true},
+			{Name: lang.TL(code, "commission_field_details"), Value: safeEmbedValue(ct.Details), Inline: false},
+			{Name: lang.TL(code, "commission_field_notes"), Value: notes, Inline: false},
+		},
+		Footer:    &discordgo.MessageEmbedFooter{Text: lang.TL(code, "commission_ticket_footer", "date", created.Format("Jan 2, 2006 15:04"))},
+		Timestamp: created.Format(time.RFC3339),
+	}
+}
+
+// handleCommissionTicketLang re-renders the commission ticket embed in the chosen
+// language as an ephemeral message for the clicking user.
+func handleCommissionTicketLang(s *discordgo.Session, i *discordgo.InteractionCreate) {
+	code := strings.TrimPrefix(i.MessageComponentData().CustomID, "commission_ticket_lang:")
+	gs := storage.GetGuild(i.GuildID)
+	gs.Lock()
+	ct, ok := gs.CommissionsRuntime.OpenCommissions[i.ChannelID]
+	gs.Unlock()
+	if !ok {
+		respond(s, i, lang.TL(code, "commission_ticket_not_found"), true)
+		return
+	}
+	_ = s.InteractionRespond(i.Interaction, &discordgo.InteractionResponse{
+		Type: discordgo.InteractionResponseChannelMessageWithSource,
+		Data: &discordgo.InteractionResponseData{
+			Embeds: []*discordgo.MessageEmbed{renderCommissionTicketEmbed(ct, code)},
+			Flags:  discordgo.MessageFlagsEphemeral,
+		},
+	})
+}
 
 func handleCommissionOrder(s *discordgo.Session, i *discordgo.InteractionCreate) {
 	cfg := storage.Cfg
@@ -264,47 +313,39 @@ func createCommissionChannel(
 		notesField = notes
 	}
 
-	embed := &discordgo.MessageEmbed{
-		Title: fmt.Sprintf("📋 Commission #%04d", num),
-		Color: 0x5865F2,
-		Fields: []*discordgo.MessageEmbedField{
-			{Name: "Client", Value: fmt.Sprintf("<@%s>", userID), Inline: true},
-			{Name: "Service", Value: serviceDisplay, Inline: true},
-			{Name: "Budget", Value: budget, Inline: true},
-			{Name: "Timeline", Value: timeline, Inline: true},
-			{Name: "Order Details", Value: details, Inline: false},
-			{Name: "Additional Notes", Value: notesField, Inline: false},
-		},
-		Footer:    &discordgo.MessageEmbedFooter{Text: fmt.Sprintf("Commission opened • %s", time.Now().Format("Jan 2, 2006 15:04"))},
-		Timestamp: time.Now().Format(time.RFC3339),
-	}
+	embed := renderCommissionTicketEmbed(ct, lang.ActiveLanguage())
 
 	pingContent := fmt.Sprintf("<@%s>", userID)
 	for _, roleID := range staffRoles {
 		pingContent += fmt.Sprintf(" <@&%s>", roleID)
 	}
 
-	detailsMsg, err := s.ChannelMessageSendComplex(ch.ID, &discordgo.MessageSend{
-		Content: pingContent,
-		Embeds:  []*discordgo.MessageEmbed{embed},
-		Components: []discordgo.MessageComponent{
-			discordgo.ActionsRow{
-				Components: []discordgo.MessageComponent{
-					discordgo.Button{
-						Label:    "Issue Invoice",
-						Style:    discordgo.SuccessButton,
-						CustomID: "commission_invoice_btn:" + ch.ID,
-						Emoji:    &discordgo.ComponentEmoji{Name: "🧾"},
-					},
-					discordgo.Button{
-						Label:    "Close Commission",
-						Style:    discordgo.DangerButton,
-						CustomID: "commission_close_btn",
-						Emoji:    &discordgo.ComponentEmoji{Name: "🔒"},
-					},
+	ticketComponents := []discordgo.MessageComponent{
+		discordgo.ActionsRow{
+			Components: []discordgo.MessageComponent{
+				discordgo.Button{
+					Label:    lang.T("commission_btn_invoice"),
+					Style:    discordgo.SuccessButton,
+					CustomID: "commission_invoice_btn:" + ch.ID,
+					Emoji:    &discordgo.ComponentEmoji{Name: "🧾"},
+				},
+				discordgo.Button{
+					Label:    lang.T("commission_btn_close"),
+					Style:    discordgo.DangerButton,
+					CustomID: "commission_close_btn",
+					Emoji:    &discordgo.ComponentEmoji{Name: "🔒"},
 				},
 			},
 		},
+	}
+	if langBtns := languageButtonsPrefix("commission_ticket_lang:"); len(langBtns) > 0 {
+		ticketComponents = append(ticketComponents, discordgo.ActionsRow{Components: langBtns})
+	}
+
+	detailsMsg, err := s.ChannelMessageSendComplex(ch.ID, &discordgo.MessageSend{
+		Content:    pingContent,
+		Embeds:     []*discordgo.MessageEmbed{embed},
+		Components: ticketComponents,
 	})
 	if err != nil {
 		slog.Error("commission failed to send details message", "channel_id", ch.ID, "error", err)

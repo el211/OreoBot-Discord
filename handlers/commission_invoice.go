@@ -332,6 +332,67 @@ func handleInvoiceList(s *discordgo.Session, i *discordgo.InteractionCreate) {
 	respond(s, i, sb.String(), true)
 }
 
+func handleInvoiceCancel(s *discordgo.Session, i *discordgo.InteractionCreate, opts []*discordgo.ApplicationCommandInteractionDataOption) {
+	om := subOptMap(opts)
+	client := om["client"].UserValue(s)
+	num := int(om["number"].IntValue())
+
+	gs := storage.GetGuild(i.GuildID)
+	gs.Lock()
+	idx := -1
+	for j := range gs.CommissionsRuntime.Invoices {
+		if gs.CommissionsRuntime.Invoices[j].Number == num {
+			idx = j
+			break
+		}
+	}
+	if idx == -1 {
+		gs.Unlock()
+		respond(s, i, fmt.Sprintf("❌ No invoice `INV-%04d` found.", num), true)
+		return
+	}
+	inv := gs.CommissionsRuntime.Invoices[idx]
+	if inv.ClientID != client.ID {
+		gs.Unlock()
+		respond(s, i, fmt.Sprintf("❌ `INV-%04d` was issued to <@%s>, not <@%s>. Double-check the number.", num, inv.ClientID, client.ID), true)
+		return
+	}
+	if inv.Paid {
+		gs.Unlock()
+		respond(s, i, fmt.Sprintf("❌ `INV-%04d` is already paid and cannot be voided.", num), true)
+		return
+	}
+	if inv.Voided {
+		gs.Unlock()
+		respond(s, i, fmt.Sprintf("ℹ️ `INV-%04d` is already cancelled.", num), true)
+		return
+	}
+	gs.CommissionsRuntime.Invoices[idx].Voided = true
+	invCopy := gs.CommissionsRuntime.Invoices[idx]
+	gs.Unlock()
+	_ = gs.Save()
+
+	var gwErrs []error
+	if payments.Svc != nil {
+		gwErrs = payments.Svc.CancelInvoice(invCopy)
+	}
+
+	if invCopy.ChannelID != "" {
+		_, _ = s.ChannelMessageSend(invCopy.ChannelID,
+			lang.T("invoice_cancelled_notice", "number", fmt.Sprintf("INV-%04d", num), "user", "<@"+invCopy.ClientID+">"))
+	}
+
+	msg := fmt.Sprintf("✅ Invoice `INV-%04d` for <@%s> has been **voided and cancelled**.", num, client.ID)
+	if len(gwErrs) > 0 {
+		var lines []string
+		for _, e := range gwErrs {
+			lines = append(lines, "• "+e.Error())
+		}
+		msg += "\n\n⚠️ Some gateways couldn't be cancelled automatically (the invoice is still voided in the bot, so payments won't be recorded):\n" + strings.Join(lines, "\n")
+	}
+	respond(s, i, msg, true)
+}
+
 func handleCommissionInvoiceButton(s *discordgo.Session, i *discordgo.InteractionCreate) {
 	channelID := strings.TrimPrefix(i.MessageComponentData().CustomID, "commission_invoice_btn:")
 
@@ -625,6 +686,12 @@ func invoiceLegalFeeFieldsL(cfg *config.Config, code string) []*discordgo.Messag
 // languageButtons returns one button per language available in lang.yml, letting
 // a client re-view the invoice in their language. Returns nil if only one exists.
 func languageButtons(invNum int) []discordgo.MessageComponent {
+	return languageButtonsPrefix(fmt.Sprintf("invoice_lang:%d:", invNum))
+}
+
+// languageButtonsPrefix returns one button per language in lang.yml, each with
+// custom_id = prefix + langCode. Returns nil if fewer than two languages exist.
+func languageButtonsPrefix(prefix string) []discordgo.MessageComponent {
 	codes := lang.AvailableLanguages()
 	if len(codes) < 2 {
 		return nil
@@ -639,7 +706,7 @@ func languageButtons(invNum int) []discordgo.MessageComponent {
 		btn := discordgo.Button{
 			Label:    strings.ToUpper(c),
 			Style:    discordgo.SecondaryButton,
-			CustomID: fmt.Sprintf("invoice_lang:%d:%s", invNum, c),
+			CustomID: prefix + c,
 		}
 		if e, ok := flags[c]; ok {
 			btn.Emoji = &discordgo.ComponentEmoji{Name: e}

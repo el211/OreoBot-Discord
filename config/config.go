@@ -469,6 +469,7 @@ type CommissionInvoice struct {
 	Note        string  `json:"note"`
 	CreatedAt   string  `json:"created_at"`
 	Paid        bool    `json:"paid"`
+	Voided      bool    `json:"voided,omitempty"`
 	// Payment gateway tracking
 	PayPalInvoiceID   string `json:"paypal_invoice_id,omitempty"`
 	PayPalPayerURL    string `json:"paypal_payer_url,omitempty"`

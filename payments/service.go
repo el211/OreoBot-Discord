@@ -206,6 +206,23 @@ func (svc *Service) CreateLinks(inv *config.CommissionInvoice) ([]PaymentButton,
 	return buttons, errs
 }
 
+// CancelInvoice best-effort cancels an invoice's gateway objects (PayPal invoice,
+// Stripe checkout session). Coinbase crypto addresses simply stop being polled.
+func (svc *Service) CancelInvoice(inv config.CommissionInvoice) []error {
+	var errs []error
+	if svc.paypal != nil && inv.PayPalInvoiceID != "" {
+		if err := svc.paypal.CancelInvoice(inv.PayPalInvoiceID); err != nil {
+			errs = append(errs, fmt.Errorf("PayPal: %w", err))
+		}
+	}
+	if svc.stripe != nil && inv.StripeSessionID != "" {
+		if err := svc.stripe.ExpireSession(inv.StripeSessionID); err != nil {
+			errs = append(errs, fmt.Errorf("Stripe: %w", err))
+		}
+	}
+	return errs
+}
+
 func ActiveGatewayNames(cfg *config.Config) []string {
 	var names []string
 	if cfg.Payment.PayPal.Enabled && cfg.Payment.PayPal.ClientID != "" {

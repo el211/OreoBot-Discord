@@ -276,6 +276,24 @@ func lastPathSegment(href string) string {
 	return href
 }
 
+// CancelInvoice cancels a sent PayPal invoice so it can no longer be paid.
+func (c *paypalClient) CancelInvoice(invoiceID string) error {
+	body := map[string]interface{}{
+		"subject":           "Invoice cancelled",
+		"note":              "This invoice has been cancelled by the merchant.",
+		"send_to_invoicer":  false,
+		"send_to_recipient": false,
+	}
+	respBody, status, err := c.do("POST", "/v2/invoicing/invoices/"+invoiceID+"/cancel", body)
+	if err != nil {
+		return err
+	}
+	if status != 204 && status != 200 {
+		return fmt.Errorf("paypal cancel invoice (HTTP %d): %s", status, string(respBody))
+	}
+	return nil
+}
+
 func (c *paypalClient) GetInvoiceStatus(invoiceID string) (string, error) {
 	body, _, err := c.do("GET", "/v2/invoicing/invoices/"+invoiceID, nil)
 	if err != nil {

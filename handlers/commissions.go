@@ -5,6 +5,7 @@ import (
 	"strings"
 
 	"discord-bot/config"
+	"discord-bot/lang"
 	"discord-bot/payments"
 	"discord-bot/storage"
 
@@ -106,6 +107,15 @@ func commissionCommands() []*discordgo.ApplicationCommand {
 					Description: "List all invoices for this server",
 					Type:        discordgo.ApplicationCommandOptionSubCommand,
 				},
+				{
+					Name:        "cancel",
+					Description: "Void and cancel an invoice",
+					Type:        discordgo.ApplicationCommandOptionSubCommand,
+					Options: []*discordgo.ApplicationCommandOption{
+						{Type: discordgo.ApplicationCommandOptionUser, Name: "client", Description: "The client the invoice was issued to", Required: true},
+						{Type: discordgo.ApplicationCommandOptionInteger, Name: "number", Description: "Invoice number (e.g. 4 for INV-0004)", Required: true},
+					},
+				},
 			},
 		},
 	}
@@ -142,6 +152,8 @@ func handleInvoiceCommand(s *discordgo.Session, i *discordgo.InteractionCreate) 
 		handleInvoiceCreate(s, i, sub.Options)
 	case "list":
 		handleInvoiceList(s, i)
+	case "cancel":
+		handleInvoiceCancel(s, i, sub.Options)
 	}
 }
 
@@ -266,27 +278,32 @@ func handleCommissionPanel(s *discordgo.Session, i *discordgo.InteractionCreate)
 
 	embed := buildCommissionPanelEmbed(gs, services, enabled)
 
-	statusLabel := "Order Here"
+	statusLabel := lang.T("commission_order_button")
 	statusStyle := discordgo.SuccessButton
 	if !enabled {
-		statusLabel = "Commissions Closed"
+		statusLabel = lang.T("commission_closed_button")
 		statusStyle = discordgo.DangerButton
 	}
 
-	msg, err := s.ChannelMessageSendComplex(panelCh, &discordgo.MessageSend{
-		Embeds: []*discordgo.MessageEmbed{embed},
-		Components: []discordgo.MessageComponent{
-			discordgo.ActionsRow{
-				Components: []discordgo.MessageComponent{
-					discordgo.Button{
-						Label:    statusLabel,
-						Style:    statusStyle,
-						CustomID: "commission_order",
-						Emoji:    &discordgo.ComponentEmoji{Name: "📋"},
-					},
+	components := []discordgo.MessageComponent{
+		discordgo.ActionsRow{
+			Components: []discordgo.MessageComponent{
+				discordgo.Button{
+					Label:    statusLabel,
+					Style:    statusStyle,
+					CustomID: "commission_order",
+					Emoji:    &discordgo.ComponentEmoji{Name: "📋"},
 				},
 			},
 		},
+	}
+	if langBtns := languageButtonsPrefix("commission_panel_lang:"); len(langBtns) > 0 {
+		components = append(components, discordgo.ActionsRow{Components: langBtns})
+	}
+
+	msg, err := s.ChannelMessageSendComplex(panelCh, &discordgo.MessageSend{
+		Embeds:     []*discordgo.MessageEmbed{embed},
+		Components: components,
 	})
 	if err != nil {
 		respond(s, i, fmt.Sprintf("❌ Failed to send panel: %s", err.Error()), true)
@@ -305,21 +322,46 @@ func handleCommissionPanel(s *discordgo.Session, i *discordgo.InteractionCreate)
 	respond(s, i, "✅ Commissions panel posted.", true)
 }
 
+// handleCommissionPanelLang re-renders the commission panel in the chosen
+// language as an ephemeral message for the clicking user.
+func handleCommissionPanelLang(s *discordgo.Session, i *discordgo.InteractionCreate) {
+	code := strings.TrimPrefix(i.MessageComponentData().CustomID, "commission_panel_lang:")
+	cfg := storage.Cfg
+	gs := storage.GetGuild(i.GuildID)
+	services := config.MergedCommissionServices(cfg, gs)
+	gs.Lock()
+	enabled := gs.CommissionsRuntime.Enabled
+	gs.Unlock()
+
+	_ = s.InteractionRespond(i.Interaction, &discordgo.InteractionResponse{
+		Type: discordgo.InteractionResponseChannelMessageWithSource,
+		Data: &discordgo.InteractionResponseData{
+			Embeds: []*discordgo.MessageEmbed{renderCommissionPanelEmbed(gs, services, enabled, code)},
+			Flags:  discordgo.MessageFlagsEphemeral,
+		},
+	})
+}
+
 func buildCommissionPanelEmbed(gs *config.GuildState, services []config.CommissionService, enabled bool) *discordgo.MessageEmbed {
+	return renderCommissionPanelEmbed(gs, services, enabled, lang.ActiveLanguage())
+}
+
+// renderCommissionPanelEmbed builds the commission panel embed in a given language.
+func renderCommissionPanelEmbed(gs *config.GuildState, services []config.CommissionService, enabled bool, code string) *discordgo.MessageEmbed {
 	cfg := storage.Cfg
 
-	statusLine := "🟢 **Status: Open** — Accepting new orders!"
+	statusLine := lang.TL(code, "commission_status_open")
 	if !enabled {
-		statusLine = "🔴 **Status: Closed** — Not accepting orders at this time."
+		statusLine = lang.TL(code, "commission_status_closed")
 	}
 
 	var desc strings.Builder
 	desc.WriteString(statusLine + "\n\n")
 
 	if len(services) == 0 {
-		desc.WriteString("*No services listed yet.*\n")
+		desc.WriteString(lang.TL(code, "commission_no_services") + "\n")
 	} else {
-		desc.WriteString("**Available Services**\n")
+		desc.WriteString(lang.TL(code, "commission_available_services") + "\n")
 		desc.WriteString("━━━━━━━━━━━━━━━━━━━━━━\n\n")
 		for _, svc := range services {
 			desc.WriteString(fmt.Sprintf("%s **%s**\n", svc.Emoji, svc.Name))
@@ -332,11 +374,11 @@ func buildCommissionPanelEmbed(gs *config.GuildState, services []config.Commissi
 		desc.WriteString("━━━━━━━━━━━━━━━━━━━━━━\n\n")
 	}
 
-	desc.WriteString("> 📬 Click **Order Here** to open a private commission ticket.\n")
-	desc.WriteString("> You will be asked to fill out a short order form.")
+	desc.WriteString(lang.TL(code, "commission_panel_footer_1") + "\n")
+	desc.WriteString(lang.TL(code, "commission_panel_footer_2"))
 
 	embed := &discordgo.MessageEmbed{
-		Title:       "📋 Commissions",
+		Title:       lang.TL(code, "commission_panel_title"),
 		Description: desc.String(),
 		Color:       0x5865F2,
 	}

@@ -93,6 +93,22 @@ func (c *stripeClient) CreateCheckoutSession(inv *config.CommissionInvoice) (str
 	return session.ID, session.URL, nil
 }
 
+// ExpireSession expires an open Checkout Session so it can no longer be paid.
+func (c *stripeClient) ExpireSession(sessionID string) error {
+	req, _ := http.NewRequest("POST", "https://api.stripe.com/v1/checkout/sessions/"+sessionID+"/expire", nil)
+	req.SetBasicAuth(c.cfg.SecretKey, "")
+	resp, err := c.http.Do(req)
+	if err != nil {
+		return err
+	}
+	defer resp.Body.Close()
+	if resp.StatusCode != 200 {
+		body, _ := io.ReadAll(resp.Body)
+		return fmt.Errorf("stripe expire session (HTTP %d): %s", resp.StatusCode, string(body))
+	}
+	return nil
+}
+
 func (c *stripeClient) GetSessionStatus(sessionID string) (string, error) {
 	req, _ := http.NewRequest("GET", "https://api.stripe.com/v1/checkout/sessions/"+sessionID, nil)
 	req.SetBasicAuth(c.cfg.SecretKey, "")

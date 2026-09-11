@@ -34,7 +34,7 @@ func (svc *Service) pollGuild(gs *config.GuildState) {
 	gs.Unlock()
 
 	for _, inv := range snapshot {
-		if inv.Paid {
+		if inv.Paid || inv.Voided {
 			continue
 		}
 
