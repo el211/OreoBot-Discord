@@ -714,47 +714,62 @@ func closeTicket(s *discordgo.Session, guildID, channelID string, closedBy *disc
 	_, _ = s.ChannelDelete(channelID)
 }
 
-func handleAddUser(s *discordgo.Session, i *discordgo.InteractionCreate) {
-	gs := storage.GetGuild(i.GuildID)
+// isTicketOrCommissionChannel reports whether the channel is an open ticket or an
+// open commission channel (so /add and /remove work in both).
+func isTicketOrCommissionChannel(gs *config.GuildState, channelID string) bool {
 	gs.Lock()
-	_, ok := gs.TicketRuntime.OpenTickets[i.ChannelID]
-	gs.Unlock()
-	if !ok {
-		respond(s, i, lang.T("ticket_not_ticket_channel"), true)
+	defer gs.Unlock()
+	if _, ok := gs.TicketRuntime.OpenTickets[channelID]; ok {
+		return true
+	}
+	if _, ok := gs.CommissionsRuntime.OpenCommissions[channelID]; ok {
+		return true
+	}
+	return false
+}
+
+func handleAddUser(s *discordgo.Session, i *discordgo.InteractionCreate) {
+	// Acknowledge immediately so we never miss Discord's 3s interaction window.
+	_ = s.InteractionRespond(i.Interaction, &discordgo.InteractionResponse{
+		Type: discordgo.InteractionResponseDeferredChannelMessageWithSource,
+		Data: &discordgo.InteractionResponseData{Flags: discordgo.MessageFlagsEphemeral},
+	})
+
+	gs := storage.GetGuild(i.GuildID)
+	if !isTicketOrCommissionChannel(gs, i.ChannelID) {
+		followup(s, i, lang.T("ticket_not_ticket_channel"))
 		return
 	}
 
-	opts := optionMap(i)
-	target := opts["user"].UserValue(s)
-
+	target := optionMap(i)["user"].UserValue(s)
 	err := s.ChannelPermissionSet(i.ChannelID, target.ID, discordgo.PermissionOverwriteTypeMember,
 		discordgo.PermissionViewChannel|discordgo.PermissionSendMessages|discordgo.PermissionReadMessageHistory, 0)
 	if err != nil {
-		respond(s, i, lang.T("ticket_add_user_failed", "error", err.Error()), true)
+		followup(s, i, lang.T("ticket_add_user_failed", "error", err.Error()))
 		return
 	}
-	respond(s, i, lang.T("ticket_user_added", "user_id", target.ID), false)
+	followup(s, i, lang.T("ticket_user_added", "user_id", target.ID))
 }
 
 func handleRemoveUser(s *discordgo.Session, i *discordgo.InteractionCreate) {
+	_ = s.InteractionRespond(i.Interaction, &discordgo.InteractionResponse{
+		Type: discordgo.InteractionResponseDeferredChannelMessageWithSource,
+		Data: &discordgo.InteractionResponseData{Flags: discordgo.MessageFlagsEphemeral},
+	})
+
 	gs := storage.GetGuild(i.GuildID)
-	gs.Lock()
-	_, ok := gs.TicketRuntime.OpenTickets[i.ChannelID]
-	gs.Unlock()
-	if !ok {
-		respond(s, i, lang.T("ticket_not_ticket_channel"), true)
+	if !isTicketOrCommissionChannel(gs, i.ChannelID) {
+		followup(s, i, lang.T("ticket_not_ticket_channel"))
 		return
 	}
 
-	opts := optionMap(i)
-	target := opts["user"].UserValue(s)
-
+	target := optionMap(i)["user"].UserValue(s)
 	err := s.ChannelPermissionDelete(i.ChannelID, target.ID)
 	if err != nil {
-		respond(s, i, lang.T("ticket_remove_user_failed", "error", err.Error()), true)
+		followup(s, i, lang.T("ticket_remove_user_failed", "error", err.Error()))
 		return
 	}
-	respond(s, i, lang.T("ticket_user_removed", "user_id", target.ID), false)
+	followup(s, i, lang.T("ticket_user_removed", "user_id", target.ID))
 }
 
 func generateTranscript(s *discordgo.Session, channelID string) string {
