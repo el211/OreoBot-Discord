@@ -261,7 +261,6 @@ func handleInvoiceCreate(s *discordgo.Session, i *discordgo.InteractionCreate, o
 			Name: lang.T("invoice_field_paypal_to"), Value: fmt.Sprintf("`%s`", paypalEmail), Inline: true,
 		})
 	}
-	fields = append(fields, cryptoPaymentFields(&inv)...)
 	if note != "" {
 		fields = append(fields, &discordgo.MessageEmbedField{Name: lang.T("invoice_field_note"), Value: note, Inline: false})
 	}
@@ -483,7 +482,6 @@ func handleCommissionInvoiceModalSubmit(s *discordgo.Session, i *discordgo.Inter
 			Name: lang.T("invoice_field_paypal_to"), Value: fmt.Sprintf("`%s`", paypalEmail), Inline: true,
 		})
 	}
-	fields = append(fields, cryptoPaymentFields(&inv)...)
 	if note != "" {
 		fields = append(fields, &discordgo.MessageEmbedField{Name: lang.T("invoice_field_note"), Value: note, Inline: false})
 	}
@@ -541,23 +539,6 @@ func cryptoPaymentsForInvoice(inv *config.CommissionInvoice) []error {
 		inv.CoinbaseCryptoPayments = cps
 	}
 	return errs
-}
-
-// cryptoPaymentFields renders the stored crypto receive addresses as embed fields.
-func cryptoPaymentFields(inv *config.CommissionInvoice) []*discordgo.MessageEmbedField {
-	var fields []*discordgo.MessageEmbedField
-	for _, p := range inv.CoinbaseCryptoPayments {
-		var name, value string
-		if p.Network != "" {
-			name = lang.T("invoice_crypto_name_net", "asset", p.Asset, "network", p.Network)
-			value = lang.T("invoice_crypto_value_net", "amount", p.Amount, "asset", p.Asset, "network", p.Network, "address", p.Address)
-		} else {
-			name = lang.T("invoice_crypto_name", "asset", p.Asset)
-			value = lang.T("invoice_crypto_value", "amount", p.Amount, "asset", p.Asset, "address", p.Address)
-		}
-		fields = append(fields, &discordgo.MessageEmbedField{Name: name, Value: value, Inline: false})
-	}
-	return fields
 }
 
 // representativeFee returns the handling fee shared by the enabled gateways and
