@@ -3,6 +3,7 @@ package lang
 import (
 	"log/slog"
 	"os"
+	"sort"
 	"strings"
 	"sync"
 
@@ -12,6 +13,7 @@ import (
 var (
 	mu             sync.RWMutex
 	messages       map[string]string
+	allMessages    = map[string]map[string]string{}
 	activeLanguage = "en"
 )
 
@@ -78,12 +80,89 @@ func Load(path string) {
 		}
 	}
 
+	// Parse every language block (not just the active one) so callers can render
+	// in any available language on demand.
+	all := map[string]map[string]string{}
+	for lk, lv := range raw {
+		if lk == "active_language" {
+			continue
+		}
+		bm, ok := lv.(map[string]interface{})
+		if !ok {
+			continue
+		}
+		lm := make(map[string]string, len(bm))
+		for k, v := range bm {
+			if s, ok := v.(string); ok {
+				lm[k] = s
+			}
+		}
+		if len(lm) > 0 {
+			all[lk] = lm
+		}
+	}
+
 	mu.Lock()
 	messages = m
+	allMessages = all
 	activeLanguage = activeLang
 	mu.Unlock()
 
-	slog.Info("language loaded", "language", activeLang, "keys", len(m))
+	slog.Info("language loaded", "language", activeLang, "keys", len(m), "languages", len(all))
+}
+
+// ActiveLanguage returns the currently active language code.
+func ActiveLanguage() string {
+	mu.RLock()
+	defer mu.RUnlock()
+	return activeLanguage
+}
+
+// AvailableLanguages returns the language codes present in the loaded lang file,
+// sorted alphabetically.
+func AvailableLanguages() []string {
+	mu.RLock()
+	defer mu.RUnlock()
+	codes := make([]string, 0, len(allMessages))
+	for c := range allMessages {
+		codes = append(codes, c)
+	}
+	sort.Strings(codes)
+	return codes
+}
+
+// TL translates a key in a specific language, falling back to English, then the
+// built-in defaults, then the raw key.
+func TL(langCode, key string, pairs ...string) string {
+	mu.RLock()
+	s, ok := "", false
+	if lm, exists := allMessages[langCode]; exists {
+		s, ok = lm[key]
+	}
+	if !ok {
+		if lm, exists := allMessages["en"]; exists {
+			s, ok = lm[key]
+		}
+	}
+	if !ok {
+		if defaults, exists := builtInMessages[langCode]; exists {
+			s, ok = defaults[key]
+		}
+	}
+	if !ok {
+		if defaults, exists := builtInMessages["en"]; exists {
+			s, ok = defaults[key]
+		}
+	}
+	mu.RUnlock()
+
+	if !ok {
+		return "{" + key + "}"
+	}
+	for j := 0; j+1 < len(pairs); j += 2 {
+		s = strings.ReplaceAll(s, "{"+pairs[j]+"}", pairs[j+1])
+	}
+	return s
 }
 
 func T(key string, pairs ...string) string {

@@ -410,6 +410,11 @@ type CommissionsConfig struct {
 	PayPalEmail     string              `json:"paypal_email"`
 	PayPalMeUser    string              `json:"paypal_me_user"`
 	Services        []CommissionService `json:"services"`
+
+	// LegalEntity is the issuing business's legal identity, shown as a legal
+	// notice on invoices (e.g. company name, SIREN/SIRET, APE code, country).
+	// Leave empty to omit the legal notice. Newlines are supported.
+	LegalEntity string `json:"legal_entity"`
 }
 
 type CommissionService struct {
@@ -460,6 +465,7 @@ type CommissionInvoice struct {
 	Amount      float64 `json:"amount"`
 	Currency    string  `json:"currency"`
 	Description string  `json:"description"`
+	ServiceName string  `json:"service_name,omitempty"`
 	Note        string  `json:"note"`
 	CreatedAt   string  `json:"created_at"`
 	Paid        bool    `json:"paid"`

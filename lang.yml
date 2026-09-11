@@ -276,6 +276,10 @@ en:
   invoice_amount_plain:       "**{amount} {currency}**"
   invoice_amount_fee:         "{base} {currency} + {fee}% fee = **{total} {currency}**"
   invoice_amount_varies:      "**{amount} {currency}** _(+ handling fee, varies by method)_"
+  invoice_fee_notice_title:   "Handling fee"
+  invoice_fee_notice:         "A {fee}% handling fee is added to cover payment-processing and transaction costs. It is already included in the totals shown above."
+  invoice_legal_title:        "Legal notice"
+  invoice_legal_body:         "This invoice is legally issued by:\n{entity}"
 
 
 # ────────────────────────────────────────────────────────────
@@ -548,3 +552,7 @@ fr:
   invoice_amount_plain:       "**{amount} {currency}**"
   invoice_amount_fee:         "{base} {currency} + {fee}% de frais = **{total} {currency}**"
   invoice_amount_varies:      "**{amount} {currency}** _(+ frais de service, selon la méthode)_"
+  invoice_fee_notice_title:   "Frais de service"
+  invoice_fee_notice:         "Des frais de service de {fee}% sont ajoutés pour couvrir les frais de traitement et de transaction des paiements. Ils sont déjà inclus dans les totaux ci-dessus."
+  invoice_legal_title:        "Mentions légales"
+  invoice_legal_body:         "Cette facture est légalement émise par :\n{entity}"

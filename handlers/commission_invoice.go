@@ -264,6 +264,7 @@ func handleInvoiceCreate(s *discordgo.Session, i *discordgo.InteractionCreate, o
 	if note != "" {
 		fields = append(fields, &discordgo.MessageEmbedField{Name: lang.T("invoice_field_note"), Value: note, Inline: false})
 	}
+	fields = append(fields, invoiceLegalFeeFields(cfg)...)
 
 	embed := &discordgo.MessageEmbed{
 		Title:       lang.T("invoice_embed_title", "number", fmt.Sprintf("INV-%04d", invNum)),
@@ -277,6 +278,7 @@ func handleInvoiceCreate(s *discordgo.Session, i *discordgo.InteractionCreate, o
 	if len(inv.CoinbaseCryptoPayments) > 0 {
 		gatewayButtons = append(gatewayButtons, cryptoPayButton(invNum))
 	}
+	gatewayButtons = append(gatewayButtons, languageButtons(invNum)...)
 	send := buildInvoiceSend(fmt.Sprintf("<@%s>", client.ID), embed, gatewayButtons)
 	if _, err := s.ChannelMessageSendComplex(i.ChannelID, send); err != nil {
 		_, _ = s.FollowupMessageCreate(i.Interaction, true, &discordgo.WebhookParams{
@@ -458,6 +460,7 @@ func handleCommissionInvoiceModalSubmit(s *discordgo.Session, i *discordgo.Inter
 		Amount:      amount,
 		Currency:    currency,
 		Description: description,
+		ServiceName: ct.ServiceName,
 		Note:        note,
 		CreatedAt:   time.Now().Format(time.RFC3339),
 	}
@@ -485,6 +488,7 @@ func handleCommissionInvoiceModalSubmit(s *discordgo.Session, i *discordgo.Inter
 	if note != "" {
 		fields = append(fields, &discordgo.MessageEmbedField{Name: lang.T("invoice_field_note"), Value: note, Inline: false})
 	}
+	fields = append(fields, invoiceLegalFeeFields(cfg)...)
 
 	embed := &discordgo.MessageEmbed{
 		Title:       lang.T("invoice_embed_title", "number", fmt.Sprintf("INV-%04d", invNum)),
@@ -498,6 +502,7 @@ func handleCommissionInvoiceModalSubmit(s *discordgo.Session, i *discordgo.Inter
 	if len(inv.CoinbaseCryptoPayments) > 0 {
 		gatewayButtons = append(gatewayButtons, cryptoPayButton(invNum))
 	}
+	gatewayButtons = append(gatewayButtons, languageButtons(invNum)...)
 	send := buildInvoiceSend(fmt.Sprintf("<@%s>", ct.UserID), embed, gatewayButtons)
 	if _, err := s.ChannelMessageSendComplex(channelID, send); err != nil {
 		_, _ = s.FollowupMessageCreate(i.Interaction, true, &discordgo.WebhookParams{
@@ -566,23 +571,144 @@ func representativeFee(cfg *config.Config) (fee float64, uniform bool) {
 	return f0, true
 }
 
-// invoiceAmountValue renders the Amount field, showing base + handling fee = total
-// when a uniform fee applies, so the client sees what they'll actually pay.
+// invoiceAmountValue renders the Amount field in the active language.
 func invoiceAmountValue(cfg *config.Config, amount float64, currency string) string {
+	return invoiceAmountValueL(cfg, amount, currency, lang.ActiveLanguage())
+}
+
+// invoiceAmountValueL renders the Amount field in the given language, showing
+// base + handling fee = total when a uniform fee applies across enabled gateways.
+func invoiceAmountValueL(cfg *config.Config, amount float64, currency, code string) string {
 	fee, uniform := representativeFee(cfg)
 	if !uniform {
-		return lang.T("invoice_amount_varies", "amount", fmt.Sprintf("%.2f", amount), "currency", currency)
+		return lang.TL(code, "invoice_amount_varies", "amount", fmt.Sprintf("%.2f", amount), "currency", currency)
 	}
 	if fee <= 0 {
-		return lang.T("invoice_amount_plain", "amount", fmt.Sprintf("%.2f", amount), "currency", currency)
+		return lang.TL(code, "invoice_amount_plain", "amount", fmt.Sprintf("%.2f", amount), "currency", currency)
 	}
 	total := amount * (1 + fee)
-	return lang.T("invoice_amount_fee",
+	return lang.TL(code, "invoice_amount_fee",
 		"base", fmt.Sprintf("%.2f", amount),
 		"fee", strconv.FormatFloat(fee*100, 'f', -1, 64),
 		"total", fmt.Sprintf("%.2f", total),
 		"currency", currency,
 	)
+}
+
+// invoiceLegalFeeFields returns the handling-fee explanation and legal-notice
+// fields appended at the bottom of an invoice embed. Each is omitted when not
+// applicable (no fee / no configured legal entity).
+func invoiceLegalFeeFields(cfg *config.Config) []*discordgo.MessageEmbedField {
+	return invoiceLegalFeeFieldsL(cfg, lang.ActiveLanguage())
+}
+
+// invoiceLegalFeeFieldsL is the language-aware variant of invoiceLegalFeeFields.
+func invoiceLegalFeeFieldsL(cfg *config.Config, code string) []*discordgo.MessageEmbedField {
+	var out []*discordgo.MessageEmbedField
+	if fee, uniform := representativeFee(cfg); uniform && fee > 0 {
+		out = append(out, &discordgo.MessageEmbedField{
+			Name:   lang.TL(code, "invoice_fee_notice_title"),
+			Value:  lang.TL(code, "invoice_fee_notice", "fee", strconv.FormatFloat(fee*100, 'f', -1, 64)),
+			Inline: false,
+		})
+	}
+	if entity := strings.TrimSpace(cfg.Commissions.LegalEntity); entity != "" {
+		out = append(out, &discordgo.MessageEmbedField{
+			Name:   lang.TL(code, "invoice_legal_title"),
+			Value:  lang.TL(code, "invoice_legal_body", "entity", entity),
+			Inline: false,
+		})
+	}
+	return out
+}
+
+// languageButtons returns one button per language available in lang.yml, letting
+// a client re-view the invoice in their language. Returns nil if only one exists.
+func languageButtons(invNum int) []discordgo.MessageComponent {
+	codes := lang.AvailableLanguages()
+	if len(codes) < 2 {
+		return nil
+	}
+	flags := map[string]string{
+		"en": "🇬🇧", "fr": "🇫🇷", "es": "🇪🇸", "de": "🇩🇪", "it": "🇮🇹",
+		"pt": "🇵🇹", "nl": "🇳🇱", "pl": "🇵🇱", "ru": "🇷🇺", "ja": "🇯🇵",
+		"zh": "🇨🇳", "ar": "🇸🇦", "tr": "🇹🇷",
+	}
+	out := make([]discordgo.MessageComponent, 0, len(codes))
+	for _, c := range codes {
+		btn := discordgo.Button{
+			Label:    strings.ToUpper(c),
+			Style:    discordgo.SecondaryButton,
+			CustomID: fmt.Sprintf("invoice_lang:%d:%s", invNum, c),
+		}
+		if e, ok := flags[c]; ok {
+			btn.Emoji = &discordgo.ComponentEmoji{Name: e}
+		}
+		out = append(out, btn)
+	}
+	return out
+}
+
+// renderInvoiceEmbed builds the invoice embed from a stored invoice in a given
+// language, used by the language buttons for an ephemeral translated view.
+func renderInvoiceEmbed(cfg *config.Config, inv config.CommissionInvoice, code string) *discordgo.MessageEmbed {
+	fields := []*discordgo.MessageEmbedField{
+		{Name: lang.TL(code, "invoice_field_number"), Value: fmt.Sprintf("`INV-%04d`", inv.Number), Inline: true},
+		{Name: lang.TL(code, "invoice_field_client"), Value: fmt.Sprintf("<@%s>", inv.ClientID), Inline: true},
+		{Name: lang.TL(code, "invoice_field_amount"), Value: invoiceAmountValueL(cfg, inv.Amount, inv.Currency, code), Inline: true},
+	}
+	if inv.ServiceName != "" {
+		fields = append(fields, &discordgo.MessageEmbedField{Name: lang.TL(code, "invoice_field_service"), Value: inv.ServiceName, Inline: true})
+	}
+	if inv.Description != "" {
+		fields = append(fields, &discordgo.MessageEmbedField{Name: lang.TL(code, "invoice_field_description"), Value: inv.Description, Inline: false})
+	}
+	if inv.Note != "" {
+		fields = append(fields, &discordgo.MessageEmbedField{Name: lang.TL(code, "invoice_field_note"), Value: inv.Note, Inline: false})
+	}
+	fields = append(fields, invoiceLegalFeeFieldsL(cfg, code)...)
+	return &discordgo.MessageEmbed{
+		Title:       lang.TL(code, "invoice_embed_title", "number", fmt.Sprintf("INV-%04d", inv.Number)),
+		Description: lang.TL(code, "invoice_embed_desc", "user", inv.ClientID),
+		Color:       0xF0A500,
+		Fields:      fields,
+	}
+}
+
+// handleInvoiceLangButton re-renders an invoice in the chosen language as an
+// ephemeral message for the clicking user.
+func handleInvoiceLangButton(s *discordgo.Session, i *discordgo.InteractionCreate) {
+	rest := strings.TrimPrefix(i.MessageComponentData().CustomID, "invoice_lang:")
+	parts := strings.SplitN(rest, ":", 2)
+	if len(parts) != 2 {
+		return
+	}
+	num, _ := strconv.Atoi(parts[0])
+	code := parts[1]
+
+	gs := storage.GetGuild(i.GuildID)
+	gs.Lock()
+	var found *config.CommissionInvoice
+	for idx := range gs.CommissionsRuntime.Invoices {
+		if gs.CommissionsRuntime.Invoices[idx].Number == num {
+			inv := gs.CommissionsRuntime.Invoices[idx]
+			found = &inv
+			break
+		}
+	}
+	gs.Unlock()
+	if found == nil {
+		respond(s, i, lang.TL(code, "invoice_crypto_none"), true)
+		return
+	}
+
+	_ = s.InteractionRespond(i.Interaction, &discordgo.InteractionResponse{
+		Type: discordgo.InteractionResponseChannelMessageWithSource,
+		Data: &discordgo.InteractionResponseData{
+			Embeds: []*discordgo.MessageEmbed{renderInvoiceEmbed(storage.Cfg, *found, code)},
+			Flags:  discordgo.MessageFlagsEphemeral,
+		},
+	})
 }
 
 // cryptoPayButton is the "Pay with Crypto" component button shown next to the
