@@ -19,11 +19,12 @@ type PaymentButton struct {
 var Svc *Service
 
 type Service struct {
-	cfg      *config.Config
-	session  *discordgo.Session
-	paypal   *paypalClient
-	stripe   *stripeClient
-	coinbase *coinbaseClient
+	cfg         *config.Config
+	session     *discordgo.Session
+	paypal      *paypalClient
+	stripe      *stripeClient
+	coinbase    *coinbaseClient
+	coinbaseCDP *cdpClient
 }
 
 func Start(cfg *config.Config, session *discordgo.Session) {
@@ -46,7 +47,16 @@ func Start(cfg *config.Config, session *discordgo.Session) {
 	}
 
 	cb := &cfg.Payment.Coinbase
-	if cb.Enabled && cb.APIKey != "" {
+	if cb.Enabled && cb.CDPKeyName != "" && cb.CDPPrivateKey != "" {
+		// CDP (Coinbase App API) address flow takes precedence over Commerce.
+		client, err := newCDPClient(cb)
+		if err != nil {
+			slog.Warn("coinbase cdp init failed", "error", err)
+		} else {
+			svc.coinbaseCDP = client
+			slog.Info("coinbase cdp (address flow) enabled", "assets", len(cb.Assets))
+		}
+	} else if cb.Enabled && cb.APIKey != "" {
 		svc.coinbase = newCoinbaseClient(cb)
 		slog.Info("coinbase commerce gateway enabled")
 	}
@@ -74,7 +84,68 @@ func (svc *Service) hasPollingGateway() bool {
 	if cb.Enabled && cb.APIKey != "" && cb.PaymentNotifications.Type == "polling" {
 		return true
 	}
+	// The CDP address flow always requires polling to detect incoming payments.
+	if svc.coinbaseCDP != nil {
+		return true
+	}
 	return false
+}
+
+// CreateCryptoPayments generates a receive address + expected amount for each
+// configured asset (CDP address flow). Returns the payments and any per-asset
+// errors. The invoice fiat amount is converted to each asset via spot price.
+func (svc *Service) CreateCryptoPayments(inv *config.CommissionInvoice) ([]config.CoinbaseCryptoPayment, []error) {
+	if svc.coinbaseCDP == nil {
+		return nil, nil
+	}
+	fiat := inv.Currency
+	if fiat == "" {
+		fiat = svc.cfg.Payment.Coinbase.Currency
+	}
+	if fiat == "" {
+		fiat = "USD"
+	}
+
+	fee := svc.cfg.Payment.Coinbase.HandlingFee
+	fiatTotal := inv.Amount
+	if fee > 0 {
+		fiatTotal = fiatTotal * (1 + fee)
+	}
+
+	var payments []config.CoinbaseCryptoPayment
+	var errs []error
+	for _, a := range svc.cfg.Payment.Coinbase.Assets {
+		asset := strings.ToUpper(strings.TrimSpace(a.Asset))
+		if asset == "" {
+			continue
+		}
+		price, err := svc.coinbaseCDP.GetSpotPrice(asset, fiat)
+		if err != nil {
+			errs = append(errs, fmt.Errorf("Coinbase %s: %w", asset, err))
+			continue
+		}
+		accountID, err := svc.coinbaseCDP.GetAccountID(asset)
+		if err != nil {
+			errs = append(errs, fmt.Errorf("Coinbase %s: %w", asset, err))
+			continue
+		}
+		address, addressID, err := svc.coinbaseCDP.CreateAddress(
+			accountID, fmt.Sprintf("INV-%04d", inv.Number), a.Network)
+		if err != nil {
+			errs = append(errs, fmt.Errorf("Coinbase %s: %w", asset, err))
+			continue
+		}
+		cryptoAmount := fiatTotal / price
+		payments = append(payments, config.CoinbaseCryptoPayment{
+			Asset:     asset,
+			Network:   a.Network,
+			Address:   address,
+			AddressID: addressID,
+			AccountID: accountID,
+			Amount:    formatCryptoAmount(asset, cryptoAmount),
+		})
+	}
+	return payments, errs
 }
 
 func (svc *Service) CreateLinks(inv *config.CommissionInvoice) ([]PaymentButton, []error) {
@@ -86,16 +157,17 @@ func (svc *Service) CreateLinks(inv *config.CommissionInvoice) ([]PaymentButton,
 		if err != nil {
 			slog.Warn("paypal create invoice failed", "error", err)
 			errs = append(errs, fmt.Errorf("PayPal: %w", err))
+		} else if payerURL == "" {
+			slog.Warn("paypal returned no payer URL", "invoice", inv.Number)
+			errs = append(errs, fmt.Errorf("PayPal: no payer URL returned"))
 		} else {
 			inv.PayPalInvoiceID = invoiceID
 			inv.PayPalPayerURL = payerURL
-			if payerURL != "" {
-				label := svc.cfg.Payment.PayPal.ButtonLabel
-				if label == "" {
-					label = "Pay with PayPal"
-				}
-				buttons = append(buttons, PaymentButton{Label: label, URL: payerURL, Emoji: "💳"})
+			label := svc.cfg.Payment.PayPal.ButtonLabel
+			if label == "" {
+				label = "Pay with PayPal"
 			}
+			buttons = append(buttons, PaymentButton{Label: label, URL: payerURL, Emoji: "💳"})
 		}
 	}
 
@@ -150,10 +222,11 @@ func ActiveGatewayNames(cfg *config.Config) []string {
 		}
 		names = append(names, n)
 	}
-	if cfg.Payment.Coinbase.Enabled && cfg.Payment.Coinbase.APIKey != "" {
-		n := cfg.Payment.Coinbase.Name
+	cbCfg := cfg.Payment.Coinbase
+	if cbCfg.Enabled && (cbCfg.APIKey != "" || (cbCfg.CDPKeyName != "" && cbCfg.CDPPrivateKey != "")) {
+		n := cbCfg.Name
 		if n == "" {
-			n = "Coinbase Commerce"
+			n = "Coinbase"
 		}
 		names = append(names, n)
 	}

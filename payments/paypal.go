@@ -7,6 +7,7 @@ import (
 	"fmt"
 	"io"
 	"net/http"
+	"strings"
 	"sync"
 	"time"
 
@@ -171,57 +172,108 @@ func (c *paypalClient) CreateInvoice(inv *config.CommissionInvoice) (string, str
 	if err != nil {
 		return "", "", fmt.Errorf("paypal create invoice: %w", err)
 	}
-	if status != 201 {
+	if status != 200 && status != 201 && status != 202 {
 		return "", "", fmt.Errorf("paypal create invoice (HTTP %d): %s", status, string(respBody))
 	}
 
+	// The create response is usually just a reference link
+	// {"rel":"self","href":".../v2/invoicing/invoices/<ID>"} — the invoice ID is
+	// only in the href. Occasionally it is the full object with "id"/"links".
 	var created struct {
-		ID    string `json:"id"`
-		Links []struct {
-			Href string `json:"href"`
-			Rel  string `json:"rel"`
-		} `json:"links"`
+		ID    string   `json:"id"`
+		Href  string   `json:"href"`
+		Links []ppLink `json:"links"`
 	}
 	if err := json.Unmarshal(respBody, &created); err != nil {
 		return "", "", err
 	}
-
-	sendPayload := map[string]interface{}{
-		"send_to_invoicer": true,
-		"send_to_recipient": false,
-	}
-	if _, _, err := c.do("POST", "/v2/invoicing/invoices/"+created.ID+"/send", sendPayload); err != nil {
-		return "", "", fmt.Errorf("paypal send invoice: %w", err)
-	}
-
-	payerURL := ""
-	for _, link := range created.Links {
-		if link.Rel == "payer-view" {
-			payerURL = link.Href
-			break
-		}
-	}
-
-	if payerURL == "" {
-		if body, _, err := c.do("GET", "/v2/invoicing/invoices/"+created.ID, nil); err == nil {
-			var fetched struct {
-				Links []struct {
-					Href string `json:"href"`
-					Rel  string `json:"rel"`
-				} `json:"links"`
-			}
-			if json.Unmarshal(body, &fetched) == nil {
-				for _, link := range fetched.Links {
-					if link.Rel == "payer-view" {
-						payerURL = link.Href
-						break
-					}
+	invoiceID := created.ID
+	if invoiceID == "" {
+		href := created.Href
+		if href == "" {
+			for _, l := range created.Links {
+				if l.Rel == "self" {
+					href = l.Href
+					break
 				}
 			}
 		}
+		invoiceID = lastPathSegment(href)
+	}
+	if invoiceID == "" {
+		return "", "", fmt.Errorf("paypal create invoice: could not determine invoice id from response: %s", string(respBody))
 	}
 
-	return created.ID, payerURL, nil
+	// Sending the invoice returns the public payer-view URL in its response body.
+	// send_to_recipient is false because the payment link is delivered via Discord.
+	sendPayload := map[string]interface{}{
+		"send_to_invoicer":  false,
+		"send_to_recipient": false,
+	}
+	sendBody, sendStatus, err := c.do("POST", "/v2/invoicing/invoices/"+invoiceID+"/send", sendPayload)
+	if err != nil {
+		return invoiceID, "", fmt.Errorf("paypal send invoice: %w", err)
+	}
+	if sendStatus != 200 && sendStatus != 202 {
+		return invoiceID, "", fmt.Errorf("paypal send invoice (HTTP %d): %s", sendStatus, string(sendBody))
+	}
+
+	// Primary source: the send response. Fallback: GET the invoice. Last resort:
+	// construct the canonical public payment URL from the invoice ID.
+	payerURL := parsePayerView(sendBody)
+	if payerURL == "" {
+		if body, _, gerr := c.do("GET", "/v2/invoicing/invoices/"+invoiceID, nil); gerr == nil {
+			payerURL = parsePayerView(body)
+		}
+	}
+	if payerURL == "" {
+		host := "https://www.paypal.com"
+		if c.cfg.UseSandbox {
+			host = "https://www.sandbox.paypal.com"
+		}
+		payerURL = host + "/invoice/p/#" + invoiceID
+	}
+
+	return invoiceID, payerURL, nil
+}
+
+// ppLink is a PayPal HATEOAS link.
+type ppLink struct {
+	Href   string `json:"href"`
+	Rel    string `json:"rel"`
+	Method string `json:"method"`
+}
+
+// parsePayerView extracts the "payer-view" href from a PayPal response body,
+// which may be a single link object or an object with a "links" array.
+func parsePayerView(body []byte) string {
+	var single ppLink
+	if json.Unmarshal(body, &single) == nil && single.Rel == "payer-view" && single.Href != "" {
+		return single.Href
+	}
+	var wrap struct {
+		Links []ppLink `json:"links"`
+	}
+	if json.Unmarshal(body, &wrap) == nil {
+		for _, l := range wrap.Links {
+			if l.Rel == "payer-view" {
+				return l.Href
+			}
+		}
+	}
+	return ""
+}
+
+// lastPathSegment returns the final non-empty path segment of a URL/href.
+func lastPathSegment(href string) string {
+	href = strings.TrimRight(strings.TrimSpace(href), "/")
+	if href == "" {
+		return ""
+	}
+	if i := strings.LastIndex(href, "/"); i != -1 {
+		return href[i+1:]
+	}
+	return href
 }
 
 func (c *paypalClient) GetInvoiceStatus(invoiceID string) (string, error) {

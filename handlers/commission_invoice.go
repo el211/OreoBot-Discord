@@ -241,6 +241,7 @@ func handleInvoiceCreate(s *discordgo.Session, i *discordgo.InteractionCreate, o
 	}
 
 	gatewayButtons, gatewayErrs := buildInvoiceButtons(&inv, paypalMe, amount, currency)
+	gatewayErrs = append(gatewayErrs, cryptoPaymentsForInvoice(&inv)...)
 
 	gs.Lock()
 	gs.CommissionsRuntime.Invoices = append(gs.CommissionsRuntime.Invoices, inv)
@@ -258,6 +259,7 @@ func handleInvoiceCreate(s *discordgo.Session, i *discordgo.InteractionCreate, o
 			Name: "Pay To (PayPal)", Value: fmt.Sprintf("`%s`", paypalEmail), Inline: true,
 		})
 	}
+	fields = append(fields, cryptoPaymentFields(&inv)...)
 	if note != "" {
 		fields = append(fields, &discordgo.MessageEmbedField{Name: "Note", Value: note, Inline: false})
 	}
@@ -457,6 +459,7 @@ func handleCommissionInvoiceModalSubmit(s *discordgo.Session, i *discordgo.Inter
 	}
 
 	gatewayButtons, gatewayErrs := buildInvoiceButtons(&inv, paypalMe, amount, currency)
+	gatewayErrs = append(gatewayErrs, cryptoPaymentsForInvoice(&inv)...)
 
 	gs.Lock()
 	gs.CommissionsRuntime.Invoices = append(gs.CommissionsRuntime.Invoices, inv)
@@ -475,6 +478,7 @@ func handleCommissionInvoiceModalSubmit(s *discordgo.Session, i *discordgo.Inter
 			Name: "Pay To (PayPal)", Value: fmt.Sprintf("`%s`", paypalEmail), Inline: true,
 		})
 	}
+	fields = append(fields, cryptoPaymentFields(&inv)...)
 	if note != "" {
 		fields = append(fields, &discordgo.MessageEmbedField{Name: "Note", Value: note, Inline: false})
 	}
@@ -516,6 +520,36 @@ func handleCommissionInvoiceModalSubmit(s *discordgo.Session, i *discordgo.Inter
 		Content: confirmMsg,
 		Flags:   discordgo.MessageFlagsEphemeral,
 	})
+}
+
+// cryptoPaymentsForInvoice generates Coinbase CDP receive addresses for the
+// invoice (one per configured asset) and stores them on inv. Returns any errors.
+func cryptoPaymentsForInvoice(inv *config.CommissionInvoice) []error {
+	if payments.Svc == nil {
+		return nil
+	}
+	cps, errs := payments.Svc.CreateCryptoPayments(inv)
+	if len(cps) > 0 {
+		inv.CoinbaseCryptoPayments = cps
+	}
+	return errs
+}
+
+// cryptoPaymentFields renders the stored crypto receive addresses as embed fields.
+func cryptoPaymentFields(inv *config.CommissionInvoice) []*discordgo.MessageEmbedField {
+	var fields []*discordgo.MessageEmbedField
+	for _, p := range inv.CoinbaseCryptoPayments {
+		net := ""
+		if p.Network != "" {
+			net = " (" + p.Network + ")"
+		}
+		fields = append(fields, &discordgo.MessageEmbedField{
+			Name:   fmt.Sprintf("₿ Pay with %s%s", p.Asset, net),
+			Value:  fmt.Sprintf("Send **%s %s** to:\n`%s`", p.Amount, p.Asset, p.Address),
+			Inline: false,
+		})
+	}
+	return fields
 }
 
 // buildInvoiceButtons assembles payment link buttons from the gateway and/or PayPal.me fallback.

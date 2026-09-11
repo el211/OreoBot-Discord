@@ -101,13 +101,35 @@ type StripePaymentConfig struct {
 }
 
 type CoinbasePaymentConfig struct {
-	Enabled              bool                       `json:"enabled"`
-	Name                 string                     `json:"name"`
-	ButtonLabel          string                     `json:"button_label"`
-	APIKey               string                     `json:"api_key"`
+	Enabled     bool   `json:"enabled"`
+	Name        string `json:"name"`
+	ButtonLabel string `json:"button_label"`
+
+	// APIKey is the legacy Coinbase Commerce API key (X-CC-Api-Key). When set and
+	// no CDP key is configured, the hosted-checkout Commerce flow is used.
+	APIKey string `json:"api_key"`
+
+	// CDPKeyName and CDPPrivateKey configure the Coinbase Developer Platform
+	// (Coinbase App API) address flow, using a normal Coinbase account.
+	// CDPKeyName is "organizations/{org}/apiKeys/{id}"; CDPPrivateKey is the
+	// base64-encoded Ed25519 secret. When both are set, the CDP address flow is
+	// used instead of Commerce: the bot generates a receive address per asset.
+	CDPKeyName    string          `json:"cdp_key_name"`
+	CDPPrivateKey string          `json:"cdp_private_key"`
+	Assets        []CoinbaseAsset `json:"assets"`
+
 	HandlingFee          float64                    `json:"handling_fee"`
 	Currency             string                     `json:"currency"`
 	PaymentNotifications PaymentNotificationsConfig `json:"payment_notifications"`
+}
+
+// CoinbaseAsset is one crypto asset customers may pay an invoice in (CDP mode).
+type CoinbaseAsset struct {
+	// Asset is the Coinbase account currency code, e.g. "BTC", "ETH", "USDC".
+	Asset string `json:"asset"`
+	// Network is the optional address network, e.g. "base" for USDC. Empty uses
+	// the asset's default network.
+	Network string `json:"network,omitempty"`
 }
 
 // WebhookServerConfig configures the optional HTTP server for receiving payment events.
@@ -448,6 +470,20 @@ type CommissionInvoice struct {
 	StripePaymentURL  string `json:"stripe_payment_url,omitempty"`
 	CoinbaseChargeID  string `json:"coinbase_charge_id,omitempty"`
 	CoinbaseHostedURL string `json:"coinbase_hosted_url,omitempty"`
+	// CoinbaseCryptoPayments holds per-asset receive addresses (CDP address flow).
+	CoinbaseCryptoPayments []CoinbaseCryptoPayment `json:"coinbase_crypto_payments,omitempty"`
+}
+
+// CoinbaseCryptoPayment is a generated receive address + expected amount for one
+// asset on an invoice (Coinbase CDP address flow).
+type CoinbaseCryptoPayment struct {
+	Asset     string `json:"asset"`
+	Network   string `json:"network,omitempty"`
+	Address   string `json:"address"`
+	AddressID string `json:"address_id"`
+	AccountID string `json:"account_id"`
+	// Amount is the expected crypto amount as a decimal string, e.g. "0.00042".
+	Amount string `json:"amount"`
 }
 
 type CommissionsRuntime struct {

@@ -3,6 +3,7 @@ package payments
 import (
 	"fmt"
 	"log/slog"
+	"strconv"
 	"time"
 
 	"discord-bot/config"
@@ -98,6 +99,29 @@ func (svc *Service) checkPaid(inv config.CommissionInvoice) (bool, string) {
 				name = "Coinbase Commerce"
 			}
 			return true, name
+		}
+	}
+
+	// CDP address flow: an invoice is paid once any of its per-asset addresses
+	// has received at least the expected amount (0.5% under-payment tolerance).
+	if svc.coinbaseCDP != nil && len(inv.CoinbaseCryptoPayments) > 0 {
+		for _, p := range inv.CoinbaseCryptoPayments {
+			expected, perr := strconv.ParseFloat(p.Amount, 64)
+			if perr != nil || expected <= 0 {
+				continue
+			}
+			received, err := svc.coinbaseCDP.AddressReceived(p.AccountID, p.AddressID)
+			if err != nil {
+				slog.Warn("coinbase cdp address check failed", "invoice", inv.Number, "asset", p.Asset, "error", err)
+				continue
+			}
+			if received >= expected*0.995 {
+				name := cfg.Payment.Coinbase.Name
+				if name == "" {
+					name = "Coinbase"
+				}
+				return true, fmt.Sprintf("%s (%s)", name, p.Asset)
+			}
 		}
 	}
 
