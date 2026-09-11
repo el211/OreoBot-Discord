@@ -169,5 +169,65 @@
         "subcategories": []
       }
     ]
+  },
+
+  "payment": {
+    "paypal": {
+      "enabled": false,
+      "name": "PayPal",
+      "button_label": "Pay with PayPal",
+      "use_sandbox": false,
+      "client_id": "PUT_PAYPAL_CLIENT_ID_HERE",
+      "client_secret": "PUT_PAYPAL_CLIENT_SECRET_HERE",
+      "merchant_name": "Your Business",
+      "merchant_email": "billing@example.com",
+      "enable_partial_payments": false,
+      "minimum_due_percentage": 0,
+      "handling_fee": 0,
+      "currency": "USD",
+      "payment_notifications": { "type": "polling" }
+    },
+
+    "stripe": {
+      "enabled": false,
+      "name": "Stripe",
+      "button_label": "Pay with Stripe",
+      "use_sandbox": false,
+      "publishable_key": "PUT_STRIPE_PUBLISHABLE_KEY_HERE",
+      "secret_key": "PUT_STRIPE_SECRET_KEY_HERE",
+      "handling_fee": 0,
+      "currency": "USD",
+      "success_url": "https://example.com/payment/success",
+      "cancel_url": "https://example.com/payment/cancel",
+      "payment_notifications": { "type": "polling" }
+    },
+
+    "coinbase": {
+      "enabled": false,
+      "name": "Coinbase",
+      "button_label": "Pay with Coinbase",
+
+      "_comment_legacy": "Set api_key for the legacy Coinbase Commerce hosted checkout (X-CC-Api-Key).",
+      "api_key": "",
+
+      "_comment_cdp": "OR use the Coinbase App API address flow with a normal Coinbase account. Create a key for the Coinbase App API with wallet permissions, then set both fields below. When set, this takes precedence over api_key.",
+      "cdp_key_name": "organizations/YOUR_ORG_ID/apiKeys/YOUR_KEY_ID",
+      "cdp_private_key": "YOUR_BASE64_ED25519_PRIVATE_KEY",
+      "assets": [
+        { "asset": "USDC", "network": "base" },
+        { "asset": "BTC" },
+        { "asset": "ETH" }
+      ],
+
+      "handling_fee": 0,
+      "currency": "USD",
+      "payment_notifications": { "type": "polling" }
+    },
+
+    "webhook": {
+      "enabled": false,
+      "port": 8080,
+      "api_url": "https://api.example.com"
+    }
   }
 }
