@@ -612,7 +612,7 @@ func cryptoPayButton(invNum int) discordgo.Button {
 		Label:    lang.T("invoice_crypto_button"),
 		Style:    discordgo.SecondaryButton,
 		CustomID: fmt.Sprintf("invoice_crypto:%d", invNum),
-		Emoji:    &discordgo.ComponentEmoji{Name: "₿"},
+		Emoji:    &discordgo.ComponentEmoji{Name: "🪙"},
 	}
 }
 
