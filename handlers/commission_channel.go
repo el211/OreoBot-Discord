@@ -40,6 +40,21 @@ func renderCommissionTicketEmbed(ct config.CommissionTicket, code string) *disco
 	}
 }
 
+// commissionTicketComponents builds the ticket's action buttons (Issue Invoice /
+// Close, localized) plus the per-language buttons.
+func commissionTicketComponents(channelID, code string) []discordgo.MessageComponent {
+	comps := []discordgo.MessageComponent{
+		discordgo.ActionsRow{Components: []discordgo.MessageComponent{
+			discordgo.Button{Label: lang.TL(code, "commission_btn_invoice"), Style: discordgo.SuccessButton, CustomID: "commission_invoice_btn:" + channelID, Emoji: &discordgo.ComponentEmoji{Name: "🧾"}},
+			discordgo.Button{Label: lang.TL(code, "commission_btn_close"), Style: discordgo.DangerButton, CustomID: "commission_close_btn", Emoji: &discordgo.ComponentEmoji{Name: "🔒"}},
+		}},
+	}
+	if langBtns := languageButtonsPrefix("commission_ticket_lang:"); len(langBtns) > 0 {
+		comps = append(comps, discordgo.ActionsRow{Components: langBtns})
+	}
+	return comps
+}
+
 // handleCommissionTicketLang re-renders the commission ticket embed in the chosen
 // language as an ephemeral message for the clicking user.
 func handleCommissionTicketLang(s *discordgo.Session, i *discordgo.InteractionCreate) {
@@ -55,8 +70,9 @@ func handleCommissionTicketLang(s *discordgo.Session, i *discordgo.InteractionCr
 	_ = s.InteractionRespond(i.Interaction, &discordgo.InteractionResponse{
 		Type: discordgo.InteractionResponseChannelMessageWithSource,
 		Data: &discordgo.InteractionResponseData{
-			Embeds: []*discordgo.MessageEmbed{renderCommissionTicketEmbed(ct, code)},
-			Flags:  discordgo.MessageFlagsEphemeral,
+			Embeds:     []*discordgo.MessageEmbed{renderCommissionTicketEmbed(ct, code)},
+			Components: commissionTicketComponents(i.ChannelID, code),
+			Flags:      discordgo.MessageFlagsEphemeral,
 		},
 	})
 }
@@ -320,32 +336,10 @@ func createCommissionChannel(
 		pingContent += fmt.Sprintf(" <@&%s>", roleID)
 	}
 
-	ticketComponents := []discordgo.MessageComponent{
-		discordgo.ActionsRow{
-			Components: []discordgo.MessageComponent{
-				discordgo.Button{
-					Label:    lang.T("commission_btn_invoice"),
-					Style:    discordgo.SuccessButton,
-					CustomID: "commission_invoice_btn:" + ch.ID,
-					Emoji:    &discordgo.ComponentEmoji{Name: "🧾"},
-				},
-				discordgo.Button{
-					Label:    lang.T("commission_btn_close"),
-					Style:    discordgo.DangerButton,
-					CustomID: "commission_close_btn",
-					Emoji:    &discordgo.ComponentEmoji{Name: "🔒"},
-				},
-			},
-		},
-	}
-	if langBtns := languageButtonsPrefix("commission_ticket_lang:"); len(langBtns) > 0 {
-		ticketComponents = append(ticketComponents, discordgo.ActionsRow{Components: langBtns})
-	}
-
 	detailsMsg, err := s.ChannelMessageSendComplex(ch.ID, &discordgo.MessageSend{
 		Content:    pingContent,
 		Embeds:     []*discordgo.MessageEmbed{embed},
-		Components: ticketComponents,
+		Components: commissionTicketComponents(ch.ID, lang.ActiveLanguage()),
 	})
 	if err != nil {
 		slog.Error("commission failed to send details message", "channel_id", ch.ID, "error", err)

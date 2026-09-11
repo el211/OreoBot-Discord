@@ -278,32 +278,9 @@ func handleCommissionPanel(s *discordgo.Session, i *discordgo.InteractionCreate)
 
 	embed := buildCommissionPanelEmbed(gs, services, enabled)
 
-	statusLabel := lang.T("commission_order_button")
-	statusStyle := discordgo.SuccessButton
-	if !enabled {
-		statusLabel = lang.T("commission_closed_button")
-		statusStyle = discordgo.DangerButton
-	}
-
-	components := []discordgo.MessageComponent{
-		discordgo.ActionsRow{
-			Components: []discordgo.MessageComponent{
-				discordgo.Button{
-					Label:    statusLabel,
-					Style:    statusStyle,
-					CustomID: "commission_order",
-					Emoji:    &discordgo.ComponentEmoji{Name: "📋"},
-				},
-			},
-		},
-	}
-	if langBtns := languageButtonsPrefix("commission_panel_lang:"); len(langBtns) > 0 {
-		components = append(components, discordgo.ActionsRow{Components: langBtns})
-	}
-
 	msg, err := s.ChannelMessageSendComplex(panelCh, &discordgo.MessageSend{
 		Embeds:     []*discordgo.MessageEmbed{embed},
-		Components: components,
+		Components: commissionPanelComponents(enabled, lang.ActiveLanguage()),
 	})
 	if err != nil {
 		respond(s, i, fmt.Sprintf("❌ Failed to send panel: %s", err.Error()), true)
@@ -322,6 +299,26 @@ func handleCommissionPanel(s *discordgo.Session, i *discordgo.InteractionCreate)
 	respond(s, i, "✅ Commissions panel posted.", true)
 }
 
+// commissionPanelComponents builds the panel's Order button (localized) plus the
+// per-language buttons.
+func commissionPanelComponents(enabled bool, code string) []discordgo.MessageComponent {
+	label := lang.TL(code, "commission_order_button")
+	style := discordgo.SuccessButton
+	if !enabled {
+		label = lang.TL(code, "commission_closed_button")
+		style = discordgo.DangerButton
+	}
+	comps := []discordgo.MessageComponent{
+		discordgo.ActionsRow{Components: []discordgo.MessageComponent{
+			discordgo.Button{Label: label, Style: style, CustomID: "commission_order", Emoji: &discordgo.ComponentEmoji{Name: "📋"}},
+		}},
+	}
+	if langBtns := languageButtonsPrefix("commission_panel_lang:"); len(langBtns) > 0 {
+		comps = append(comps, discordgo.ActionsRow{Components: langBtns})
+	}
+	return comps
+}
+
 // handleCommissionPanelLang re-renders the commission panel in the chosen
 // language as an ephemeral message for the clicking user.
 func handleCommissionPanelLang(s *discordgo.Session, i *discordgo.InteractionCreate) {
@@ -336,8 +333,9 @@ func handleCommissionPanelLang(s *discordgo.Session, i *discordgo.InteractionCre
 	_ = s.InteractionRespond(i.Interaction, &discordgo.InteractionResponse{
 		Type: discordgo.InteractionResponseChannelMessageWithSource,
 		Data: &discordgo.InteractionResponseData{
-			Embeds: []*discordgo.MessageEmbed{renderCommissionPanelEmbed(gs, services, enabled, code)},
-			Flags:  discordgo.MessageFlagsEphemeral,
+			Embeds:     []*discordgo.MessageEmbed{renderCommissionPanelEmbed(gs, services, enabled, code)},
+			Components: commissionPanelComponents(enabled, code),
+			Flags:      discordgo.MessageFlagsEphemeral,
 		},
 	})
 }
