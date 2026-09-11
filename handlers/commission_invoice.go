@@ -7,6 +7,7 @@ import (
 	"time"
 
 	"discord-bot/config"
+	"discord-bot/lang"
 	"discord-bot/payments"
 	"discord-bot/storage"
 
@@ -249,24 +250,24 @@ func handleInvoiceCreate(s *discordgo.Session, i *discordgo.InteractionCreate, o
 	_ = gs.Save()
 
 	fields := []*discordgo.MessageEmbedField{
-		{Name: "Invoice #", Value: fmt.Sprintf("`INV-%04d`", invNum), Inline: true},
-		{Name: "Client", Value: fmt.Sprintf("<@%s>", client.ID), Inline: true},
-		{Name: "Amount", Value: fmt.Sprintf("**%.2f %s**", amount, currency), Inline: true},
-		{Name: "Service", Value: description, Inline: false},
+		{Name: lang.T("invoice_field_number"), Value: fmt.Sprintf("`INV-%04d`", invNum), Inline: true},
+		{Name: lang.T("invoice_field_client"), Value: fmt.Sprintf("<@%s>", client.ID), Inline: true},
+		{Name: lang.T("invoice_field_amount"), Value: fmt.Sprintf("**%.2f %s**", amount, currency), Inline: true},
+		{Name: lang.T("invoice_field_service"), Value: description, Inline: false},
 	}
 	if len(gatewayButtons) == 0 && paypalEmail != "" {
 		fields = append(fields, &discordgo.MessageEmbedField{
-			Name: "Pay To (PayPal)", Value: fmt.Sprintf("`%s`", paypalEmail), Inline: true,
+			Name: lang.T("invoice_field_paypal_to"), Value: fmt.Sprintf("`%s`", paypalEmail), Inline: true,
 		})
 	}
 	fields = append(fields, cryptoPaymentFields(&inv)...)
 	if note != "" {
-		fields = append(fields, &discordgo.MessageEmbedField{Name: "Note", Value: note, Inline: false})
+		fields = append(fields, &discordgo.MessageEmbedField{Name: lang.T("invoice_field_note"), Value: note, Inline: false})
 	}
 
 	embed := &discordgo.MessageEmbed{
-		Title:       fmt.Sprintf("🧾 Invoice #INV-%04d", invNum),
-		Description: fmt.Sprintf("<@%s> — please review and complete payment below.", client.ID),
+		Title:       lang.T("invoice_embed_title", "number", fmt.Sprintf("INV-%04d", invNum)),
+		Description: lang.T("invoice_embed_desc", "user", client.ID),
 		Color:       0xF0A500,
 		Fields:      fields,
 		Footer:      &discordgo.MessageEmbedFooter{Text: fmt.Sprintf("Created by %s • %s", i.Member.User.Username, time.Now().Format("Jan 2, 2006"))},
@@ -467,25 +468,25 @@ func handleCommissionInvoiceModalSubmit(s *discordgo.Session, i *discordgo.Inter
 	_ = gs.Save()
 
 	fields := []*discordgo.MessageEmbedField{
-		{Name: "Invoice #", Value: fmt.Sprintf("`INV-%04d`", invNum), Inline: true},
-		{Name: "Client", Value: fmt.Sprintf("<@%s>", ct.UserID), Inline: true},
-		{Name: "Amount", Value: fmt.Sprintf("**%.2f %s**", amount, currency), Inline: true},
-		{Name: "Service", Value: ct.ServiceName, Inline: true},
-		{Name: "Description", Value: description, Inline: false},
+		{Name: lang.T("invoice_field_number"), Value: fmt.Sprintf("`INV-%04d`", invNum), Inline: true},
+		{Name: lang.T("invoice_field_client"), Value: fmt.Sprintf("<@%s>", ct.UserID), Inline: true},
+		{Name: lang.T("invoice_field_amount"), Value: fmt.Sprintf("**%.2f %s**", amount, currency), Inline: true},
+		{Name: lang.T("invoice_field_service"), Value: ct.ServiceName, Inline: true},
+		{Name: lang.T("invoice_field_description"), Value: description, Inline: false},
 	}
 	if len(gatewayButtons) == 0 && paypalEmail != "" {
 		fields = append(fields, &discordgo.MessageEmbedField{
-			Name: "Pay To (PayPal)", Value: fmt.Sprintf("`%s`", paypalEmail), Inline: true,
+			Name: lang.T("invoice_field_paypal_to"), Value: fmt.Sprintf("`%s`", paypalEmail), Inline: true,
 		})
 	}
 	fields = append(fields, cryptoPaymentFields(&inv)...)
 	if note != "" {
-		fields = append(fields, &discordgo.MessageEmbedField{Name: "Note", Value: note, Inline: false})
+		fields = append(fields, &discordgo.MessageEmbedField{Name: lang.T("invoice_field_note"), Value: note, Inline: false})
 	}
 
 	embed := &discordgo.MessageEmbed{
-		Title:       fmt.Sprintf("🧾 Invoice #INV-%04d", invNum),
-		Description: fmt.Sprintf("<@%s> — please review your order and complete payment below.", ct.UserID),
+		Title:       lang.T("invoice_embed_title", "number", fmt.Sprintf("INV-%04d", invNum)),
+		Description: lang.T("invoice_embed_desc", "user", ct.UserID),
 		Color:       0xF0A500,
 		Fields:      fields,
 		Footer:      &discordgo.MessageEmbedFooter{Text: fmt.Sprintf("Issued by %s • %s", i.Member.User.Username, time.Now().Format("Jan 2, 2006"))},
@@ -539,15 +540,15 @@ func cryptoPaymentsForInvoice(inv *config.CommissionInvoice) []error {
 func cryptoPaymentFields(inv *config.CommissionInvoice) []*discordgo.MessageEmbedField {
 	var fields []*discordgo.MessageEmbedField
 	for _, p := range inv.CoinbaseCryptoPayments {
-		net := ""
+		var name, value string
 		if p.Network != "" {
-			net = " (" + p.Network + ")"
+			name = lang.T("invoice_crypto_name_net", "asset", p.Asset, "network", p.Network)
+			value = lang.T("invoice_crypto_value_net", "amount", p.Amount, "asset", p.Asset, "network", p.Network, "address", p.Address)
+		} else {
+			name = lang.T("invoice_crypto_name", "asset", p.Asset)
+			value = lang.T("invoice_crypto_value", "amount", p.Amount, "asset", p.Asset, "address", p.Address)
 		}
-		fields = append(fields, &discordgo.MessageEmbedField{
-			Name:   fmt.Sprintf("₿ Pay with %s%s", p.Asset, net),
-			Value:  fmt.Sprintf("Send **%s %s** to:\n`%s`", p.Amount, p.Asset, p.Address),
-			Inline: false,
-		})
+		fields = append(fields, &discordgo.MessageEmbedField{Name: name, Value: value, Inline: false})
 	}
 	return fields
 }
@@ -572,7 +573,7 @@ func buildInvoiceButtons(inv *config.CommissionInvoice, paypalMe string, amount 
 	if len(buttons) == 0 && paypalMe != "" {
 		paypalURL := fmt.Sprintf("https://paypal.me/%s/%.2f%s", paypalMe, amount, currency)
 		buttons = append(buttons, discordgo.Button{
-			Label: fmt.Sprintf("Pay %.2f %s via PayPal", amount, currency),
+			Label: lang.T("invoice_paypalme_button", "amount", fmt.Sprintf("%.2f", amount), "currency", currency),
 			Style: discordgo.LinkButton,
 			URL:   paypalURL,
 			Emoji: &discordgo.ComponentEmoji{Name: "💳"},

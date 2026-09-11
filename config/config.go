@@ -777,7 +777,9 @@ func EffectiveLinkFilterMessage(cfg *Config, gs *GuildState) string {
 	if cfg.LinkFilter.Message != "" {
 		return cfg.LinkFilter.Message
 	}
-	return "{user} You are not allowed to post links here."
+	// Empty means "no explicit message configured" — callers fall back to the
+	// localized linkfilter_warning string.
+	return ""
 }
 
 func MergedTicketCategories(cfg *Config, gs *GuildState) []TicketCategory {

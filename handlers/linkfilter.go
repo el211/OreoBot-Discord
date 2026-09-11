@@ -9,6 +9,7 @@ import (
 	"time"
 
 	"discord-bot/config"
+	"discord-bot/lang"
 	"discord-bot/storage"
 
 	"github.com/bwmarrin/discordgo"
@@ -136,7 +137,11 @@ func (h *Handler) handleLinkFilterMessage(s *discordgo.Session, m *discordgo.Mes
 	}
 
 	warn := config.EffectiveLinkFilterMessage(h.cfg, gs)
-	warn = strings.ReplaceAll(warn, "{user}", "<@"+m.Author.ID+">")
+	if warn == "" {
+		warn = lang.T("linkfilter_warning", "user", "<@"+m.Author.ID+">")
+	} else {
+		warn = strings.ReplaceAll(warn, "{user}", "<@"+m.Author.ID+">")
+	}
 	sendTemp(s, m.ChannelID, warn, 8)
 
 	logLinkFilter(s, m.Message, sample)
@@ -357,7 +362,11 @@ func handleLinkFilterList(s *discordgo.Session, i *discordgo.InteractionCreate, 
 			sb.WriteString(fmt.Sprintf("• `%s`\n", d))
 		}
 	}
-	sb.WriteString(fmt.Sprintf("\n**Warning message:**\n%s", config.EffectiveLinkFilterMessage(cfg, gs)))
+	msg := config.EffectiveLinkFilterMessage(cfg, gs)
+	if msg == "" {
+		msg = lang.T("linkfilter_warning")
+	}
+	sb.WriteString(fmt.Sprintf("\n**Warning message:**\n%s", msg))
 	respond(s, i, sb.String(), true)
 }
 

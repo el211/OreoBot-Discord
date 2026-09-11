@@ -252,6 +252,25 @@ en:
   # ── MC players embed ─────────────────────────────────────
   mc_players_embed_title: "⛏️ Online Players"
 
+  # ── Link filter ──────────────────────────────────────────
+  linkfilter_warning: "{user} You are not allowed to post links here."
+
+  # ── Invoices / payments ──────────────────────────────────
+  invoice_embed_title:       "🧾 Invoice #{number}"
+  invoice_embed_desc:        "<@{user}> — please review and complete payment below."
+  invoice_field_number:      "Invoice #"
+  invoice_field_client:      "Client"
+  invoice_field_amount:      "Amount"
+  invoice_field_service:     "Service"
+  invoice_field_description: "Description"
+  invoice_field_note:        "Note"
+  invoice_field_paypal_to:   "Pay To (PayPal)"
+  invoice_paypalme_button:   "Pay {amount} {currency} via PayPal"
+  invoice_crypto_name:       "₿ Pay with {asset}"
+  invoice_crypto_name_net:   "₿ Pay with {asset} ({network})"
+  invoice_crypto_value:      "Send **{amount} {asset}** to:\n`{address}`"
+  invoice_crypto_value_net:  "⚠️ Send **{amount} {asset}** on the **{network}** network only, to:\n`{address}`"
+
 
 # ────────────────────────────────────────────────────────────
 # FRENCH  (fr)
@@ -498,3 +517,22 @@ fr:
 
   # ── MC players embed ─────────────────────────────────────
   mc_players_embed_title: "⛏️ Joueurs en ligne"
+
+  # ── Filtre de liens ──────────────────────────────────────
+  linkfilter_warning: "{user} Vous n'êtes pas autorisé à publier des liens ici."
+
+  # ── Factures / paiements ─────────────────────────────────
+  invoice_embed_title:       "🧾 Facture #{number}"
+  invoice_embed_desc:        "<@{user}> — veuillez vérifier et effectuer le paiement ci-dessous."
+  invoice_field_number:      "Facture #"
+  invoice_field_client:      "Client"
+  invoice_field_amount:      "Montant"
+  invoice_field_service:     "Service"
+  invoice_field_description: "Description"
+  invoice_field_note:        "Note"
+  invoice_field_paypal_to:   "Payer à (PayPal)"
+  invoice_paypalme_button:   "Payer {amount} {currency} via PayPal"
+  invoice_crypto_name:       "₿ Payer en {asset}"
+  invoice_crypto_name_net:   "₿ Payer en {asset} ({network})"
+  invoice_crypto_value:      "Envoyez **{amount} {asset}** à :\n`{address}`"
+  invoice_crypto_value_net:  "⚠️ Envoyez **{amount} {asset}** uniquement sur le réseau **{network}**, à :\n`{address}`"
