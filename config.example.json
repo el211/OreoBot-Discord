@@ -171,6 +171,29 @@
     ]
   },
 
+  "commissions": {
+    "enabled": false,
+    "panel_channel": "PUT_COMMISSION_PANEL_CHANNEL_ID_HERE",
+    "log_channel": "PUT_COMMISSION_LOG_CHANNEL_ID_HERE",
+    "staff_roles": "PUT_STAFF_ROLE_ID_HERE",
+    "discord_category": "PUT_COMMISSION_CATEGORY_ID_HERE",
+    "paypal_email": "",
+    "paypal_me_user": "",
+
+    "_comment_legal": "Shown as a legal notice at the bottom of invoices. Leave empty to omit. Newlines (\\n) are supported. Example for a French sole trader below.",
+    "legal_entity": "Your Company — Type of Business\nSIREN 000 000 000 · SIRET 000 000 000 00000 · Code APE 00.00Z · Country",
+
+    "services": [
+      {
+        "id": "example",
+        "name": "Example Service",
+        "emoji": "🛠️",
+        "description": "Describe what this service is",
+        "starting_price": "50 EUR"
+      }
+    ]
+  },
+
   "payment": {
     "paypal": {
       "enabled": false,

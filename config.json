@@ -1,0 +1,212 @@
+{
+  "discord": {
+    "token": "",
+    "guild_id": "",
+    "prefix": "!"
+  },
+
+  "youtube": {
+    "api_key": ""
+  },
+
+  "database": {
+    "driver": "sqlite",
+    "sqlite": {
+      "path": "data/bot.db"
+    },
+    "mongodb": {
+      "uri": "mongodb://localhost:27017",
+      "database": "discord_bot"
+    }
+  },
+
+  "minecraft": {
+    "enabled": false,
+    "rcon_ip": "127.0.0.1",
+    "rcon_port": 25575,
+    "rcon_password": "",
+    "link_backend": "file"
+  },
+
+  "permissions": {
+    "admin_roles": [],
+    "moderator_roles": [],
+    "dj_roles": []
+  },
+
+  "music": {
+    "enabled": false,
+    "backend": "direct",
+    "max_queue_size": 100,
+    "max_song_duration": 600,
+    "allow_playlists": true,
+    "default_volume": 50,
+    "direct": {
+      "ytdlp_path": "yt-dlp",
+      "ffmpeg_path": "ffmpeg"
+    },
+    "lavalink": {
+      "host": "localhost",
+      "port": 2333,
+      "password": "youshallnotpass",
+      "secure": false
+    }
+  },
+
+  "welcome": {
+    "enabled": false,
+    "channel_id": "",
+    "embed": {
+      "colour": "#5865F2",
+      "title": "Welcome!",
+      "message": "Welcome %joined_user%!",
+      "thumbnail": "BOT",
+      "image_enabled": false,
+      "image_url": ""
+    }
+  },
+
+  "leave": {
+    "enabled": false,
+    "channel_id": "",
+    "embed": {
+      "colour": "#5865F2",
+      "title": "Goodbye!",
+      "message": "%joined_user% has left.",
+      "thumbnail": "BOT",
+      "image_enabled": false,
+      "image_url": ""
+    }
+  },
+
+  "moderation": {
+    "mod_log_channel": "",
+    "mute_role": "",
+    "auto_mod": {
+      "enabled": false,
+      "max_mentions": 5,
+      "max_lines": 30,
+      "anti_spam_seconds": 5,
+      "anti_spam_count": 5
+    }
+  },
+
+  "link_filter": {
+    "enabled": false,
+    "allowed_roles": [],
+    "whitelist_domains": [],
+    "block_invites": true,
+    "delete_message": true,
+    "message": ""
+  },
+
+  "no_ping": {
+    "enabled": false,
+    "protected_roles": [],
+    "bypass_roles": [],
+    "message": "{user}, you are not allowed to ping {role}.",
+    "delete_message": true
+  },
+
+  "counting_game": {
+    "enabled": false,
+    "channel_id": "",
+    "fail_resets": false,
+    "delete_wrong": true,
+    "delete_non_numbers": true
+  },
+
+  "tickets": {
+    "enabled": false,
+    "panel_channel": "",
+    "log_channel": "",
+    "staff_roles": "",
+    "discord_category": "",
+    "max_open_per_user": 1,
+    "categories": []
+  },
+
+  "commissions": {
+    "enabled": false,
+    "panel_channel": "",
+    "log_channel": "",
+    "staff_roles": "",
+    "discord_category": "",
+    "paypal_email": "",
+    "paypal_me_user": "",
+    "legal_entity": "",
+    "services": []
+  },
+
+  "chat_bridge": {
+    "enabled": false,
+    "rabbitmq_uri": "",
+    "channel_id": "",
+    "mc_channel_id": "",
+    "ban_sync": false,
+    "mod_sync": false
+  },
+
+  "verify": {
+    "products": []
+  },
+
+  "custom_commands": [],
+
+  "auto_restart_minutes": 0,
+
+  "payment": {
+    "paypal": {
+      "enabled": false,
+      "name": "PayPal",
+      "button_label": "Pay with PayPal",
+      "use_sandbox": false,
+      "client_id": "",
+      "client_secret": "",
+      "merchant_name": "",
+      "merchant_email": "",
+      "enable_partial_payments": false,
+      "minimum_due_percentage": 0,
+      "handling_fee": 0,
+      "currency": "USD",
+      "payment_notifications": { "type": "polling" }
+    },
+    "stripe": {
+      "enabled": false,
+      "name": "Stripe",
+      "button_label": "Pay with Stripe",
+      "use_sandbox": false,
+      "publishable_key": "",
+      "secret_key": "",
+      "handling_fee": 0,
+      "currency": "USD",
+      "success_url": "",
+      "cancel_url": "",
+      "payment_notifications": { "type": "polling" }
+    },
+    "coinbase": {
+      "enabled": false,
+      "name": "Coinbase",
+      "button_label": "Pay with Coinbase",
+      "api_key": "",
+      "cdp_key_name": "",
+      "cdp_private_key": "",
+      "assets": [],
+      "handling_fee": 0,
+      "currency": "USD",
+      "payment_notifications": { "type": "polling" }
+    },
+    "webhook": {
+      "enabled": false,
+      "port": 8080,
+      "api_url": ""
+    }
+  },
+
+  "github": {
+    "enabled": false,
+    "webhook_secret": "",
+    "webhook_port": 8080,
+    "subscriptions": []
+  }
+}
