@@ -206,6 +206,10 @@ func handleComponent(s *discordgo.Session, i *discordgo.InteractionCreate) {
 		handleCommissionInvoiceButton(s, i)
 		return
 	}
+	if strings.HasPrefix(customID, "invoice_crypto:") {
+		handleInvoiceCryptoButton(s, i)
+		return
+	}
 	if strings.HasPrefix(customID, "commission_quote_btn:") {
 		handleCommissionQuoteButton(s, i)
 		return

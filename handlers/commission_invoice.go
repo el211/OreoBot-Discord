@@ -2,6 +2,7 @@ package handlers
 
 import (
 	"fmt"
+	"net/url"
 	"strconv"
 	"strings"
 	"time"
@@ -252,7 +253,7 @@ func handleInvoiceCreate(s *discordgo.Session, i *discordgo.InteractionCreate, o
 	fields := []*discordgo.MessageEmbedField{
 		{Name: lang.T("invoice_field_number"), Value: fmt.Sprintf("`INV-%04d`", invNum), Inline: true},
 		{Name: lang.T("invoice_field_client"), Value: fmt.Sprintf("<@%s>", client.ID), Inline: true},
-		{Name: lang.T("invoice_field_amount"), Value: fmt.Sprintf("**%.2f %s**", amount, currency), Inline: true},
+		{Name: lang.T("invoice_field_amount"), Value: invoiceAmountValue(cfg, amount, currency), Inline: true},
 		{Name: lang.T("invoice_field_service"), Value: description, Inline: false},
 	}
 	if len(gatewayButtons) == 0 && paypalEmail != "" {
@@ -274,6 +275,9 @@ func handleInvoiceCreate(s *discordgo.Session, i *discordgo.InteractionCreate, o
 		Timestamp:   time.Now().Format(time.RFC3339),
 	}
 
+	if len(inv.CoinbaseCryptoPayments) > 0 {
+		gatewayButtons = append(gatewayButtons, cryptoPayButton(invNum))
+	}
 	send := buildInvoiceSend(fmt.Sprintf("<@%s>", client.ID), embed, gatewayButtons)
 	if _, err := s.ChannelMessageSendComplex(i.ChannelID, send); err != nil {
 		_, _ = s.FollowupMessageCreate(i.Interaction, true, &discordgo.WebhookParams{
@@ -470,7 +474,7 @@ func handleCommissionInvoiceModalSubmit(s *discordgo.Session, i *discordgo.Inter
 	fields := []*discordgo.MessageEmbedField{
 		{Name: lang.T("invoice_field_number"), Value: fmt.Sprintf("`INV-%04d`", invNum), Inline: true},
 		{Name: lang.T("invoice_field_client"), Value: fmt.Sprintf("<@%s>", ct.UserID), Inline: true},
-		{Name: lang.T("invoice_field_amount"), Value: fmt.Sprintf("**%.2f %s**", amount, currency), Inline: true},
+		{Name: lang.T("invoice_field_amount"), Value: invoiceAmountValue(cfg, amount, currency), Inline: true},
 		{Name: lang.T("invoice_field_service"), Value: ct.ServiceName, Inline: true},
 		{Name: lang.T("invoice_field_description"), Value: description, Inline: false},
 	}
@@ -493,6 +497,9 @@ func handleCommissionInvoiceModalSubmit(s *discordgo.Session, i *discordgo.Inter
 		Timestamp:   time.Now().Format(time.RFC3339),
 	}
 
+	if len(inv.CoinbaseCryptoPayments) > 0 {
+		gatewayButtons = append(gatewayButtons, cryptoPayButton(invNum))
+	}
 	send := buildInvoiceSend(fmt.Sprintf("<@%s>", ct.UserID), embed, gatewayButtons)
 	if _, err := s.ChannelMessageSendComplex(channelID, send); err != nil {
 		_, _ = s.FollowupMessageCreate(i.Interaction, true, &discordgo.WebhookParams{
@@ -551,6 +558,122 @@ func cryptoPaymentFields(inv *config.CommissionInvoice) []*discordgo.MessageEmbe
 		fields = append(fields, &discordgo.MessageEmbedField{Name: name, Value: value, Inline: false})
 	}
 	return fields
+}
+
+// representativeFee returns the handling fee shared by the enabled gateways and
+// whether they all use the same fee. If they differ, uniform is false.
+func representativeFee(cfg *config.Config) (fee float64, uniform bool) {
+	var fees []float64
+	if cfg.Payment.PayPal.Enabled {
+		fees = append(fees, cfg.Payment.PayPal.HandlingFee)
+	}
+	if cfg.Payment.Stripe.Enabled {
+		fees = append(fees, cfg.Payment.Stripe.HandlingFee)
+	}
+	if cfg.Payment.Coinbase.Enabled {
+		fees = append(fees, cfg.Payment.Coinbase.HandlingFee)
+	}
+	if len(fees) == 0 {
+		return 0, true
+	}
+	f0 := fees[0]
+	for _, f := range fees {
+		if f != f0 {
+			return 0, false
+		}
+	}
+	return f0, true
+}
+
+// invoiceAmountValue renders the Amount field, showing base + handling fee = total
+// when a uniform fee applies, so the client sees what they'll actually pay.
+func invoiceAmountValue(cfg *config.Config, amount float64, currency string) string {
+	fee, uniform := representativeFee(cfg)
+	if !uniform {
+		return lang.T("invoice_amount_varies", "amount", fmt.Sprintf("%.2f", amount), "currency", currency)
+	}
+	if fee <= 0 {
+		return lang.T("invoice_amount_plain", "amount", fmt.Sprintf("%.2f", amount), "currency", currency)
+	}
+	total := amount * (1 + fee)
+	return lang.T("invoice_amount_fee",
+		"base", fmt.Sprintf("%.2f", amount),
+		"fee", strconv.FormatFloat(fee*100, 'f', -1, 64),
+		"total", fmt.Sprintf("%.2f", total),
+		"currency", currency,
+	)
+}
+
+// cryptoPayButton is the "Pay with Crypto" component button shown next to the
+// PayPal/Stripe buttons. Crypto has no hosted checkout URL, so clicking it opens
+// an ephemeral panel with QR codes and addresses instead.
+func cryptoPayButton(invNum int) discordgo.Button {
+	return discordgo.Button{
+		Label:    lang.T("invoice_crypto_button"),
+		Style:    discordgo.SecondaryButton,
+		CustomID: fmt.Sprintf("invoice_crypto:%d", invNum),
+		Emoji:    &discordgo.ComponentEmoji{Name: "₿"},
+	}
+}
+
+// cryptoQRURL builds a QR image URL for a crypto payment. BTC uses a BIP21 URI
+// (so wallets prefill the amount); others encode the bare address.
+func cryptoQRURL(p config.CoinbaseCryptoPayment) string {
+	data := p.Address
+	if strings.EqualFold(p.Asset, "BTC") {
+		data = "bitcoin:" + p.Address + "?amount=" + p.Amount
+	}
+	return "https://api.qrserver.com/v1/create-qr-code/?size=240x240&data=" + url.QueryEscape(data)
+}
+
+// handleInvoiceCryptoButton shows the crypto payment options for an invoice as an
+// ephemeral panel: one embed per asset with a QR code, amount, network, address.
+func handleInvoiceCryptoButton(s *discordgo.Session, i *discordgo.InteractionCreate) {
+	numStr := strings.TrimPrefix(i.MessageComponentData().CustomID, "invoice_crypto:")
+	num, _ := strconv.Atoi(numStr)
+
+	gs := storage.GetGuild(i.GuildID)
+	gs.Lock()
+	var payments []config.CoinbaseCryptoPayment
+	for _, inv := range gs.CommissionsRuntime.Invoices {
+		if inv.Number == num {
+			payments = inv.CoinbaseCryptoPayments
+			break
+		}
+	}
+	gs.Unlock()
+
+	if len(payments) == 0 {
+		respond(s, i, lang.T("invoice_crypto_none"), true)
+		return
+	}
+
+	embeds := make([]*discordgo.MessageEmbed, 0, len(payments))
+	for _, p := range payments {
+		var title, desc string
+		if p.Network != "" {
+			title = lang.T("invoice_crypto_name_net", "asset", p.Asset, "network", p.Network)
+			desc = lang.T("invoice_crypto_value_net", "amount", p.Amount, "asset", p.Asset, "network", p.Network, "address", p.Address)
+		} else {
+			title = lang.T("invoice_crypto_name", "asset", p.Asset)
+			desc = lang.T("invoice_crypto_value", "amount", p.Amount, "asset", p.Asset, "address", p.Address)
+		}
+		embeds = append(embeds, &discordgo.MessageEmbed{
+			Title:       title,
+			Description: desc,
+			Color:       0xF0A500,
+			Image:       &discordgo.MessageEmbedImage{URL: cryptoQRURL(p)},
+		})
+	}
+
+	_ = s.InteractionRespond(i.Interaction, &discordgo.InteractionResponse{
+		Type: discordgo.InteractionResponseChannelMessageWithSource,
+		Data: &discordgo.InteractionResponseData{
+			Content: lang.T("invoice_crypto_panel_title", "number", fmt.Sprintf("INV-%04d", num)),
+			Embeds:  embeds,
+			Flags:   discordgo.MessageFlagsEphemeral,
+		},
+	})
 }
 
 // buildInvoiceButtons assembles payment link buttons from the gateway and/or PayPal.me fallback.

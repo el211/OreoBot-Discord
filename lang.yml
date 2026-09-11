@@ -270,6 +270,12 @@ en:
   invoice_crypto_name_net:   "₿ Pay with {asset} ({network})"
   invoice_crypto_value:      "Send **{amount} {asset}** to:\n`{address}`"
   invoice_crypto_value_net:  "⚠️ Send **{amount} {asset}** on the **{network}** network only, to:\n`{address}`"
+  invoice_crypto_button:      "Pay with Crypto"
+  invoice_crypto_panel_title: "**Crypto payment — {number}** · scan a QR with your wallet or copy an address:"
+  invoice_crypto_none:        "No crypto payment options are available for this invoice."
+  invoice_amount_plain:       "**{amount} {currency}**"
+  invoice_amount_fee:         "{base} {currency} + {fee}% fee = **{total} {currency}**"
+  invoice_amount_varies:      "**{amount} {currency}** _(+ handling fee, varies by method)_"
 
 
 # ────────────────────────────────────────────────────────────
@@ -536,3 +542,9 @@ fr:
   invoice_crypto_name_net:   "₿ Payer en {asset} ({network})"
   invoice_crypto_value:      "Envoyez **{amount} {asset}** à :\n`{address}`"
   invoice_crypto_value_net:  "⚠️ Envoyez **{amount} {asset}** uniquement sur le réseau **{network}**, à :\n`{address}`"
+  invoice_crypto_button:      "Payer en crypto"
+  invoice_crypto_panel_title: "**Paiement crypto — {number}** · scannez un QR avec votre portefeuille ou copiez une adresse :"
+  invoice_crypto_none:        "Aucune option de paiement crypto n'est disponible pour cette facture."
+  invoice_amount_plain:       "**{amount} {currency}**"
+  invoice_amount_fee:         "{base} {currency} + {fee}% de frais = **{total} {currency}**"
+  invoice_amount_varies:      "**{amount} {currency}** _(+ frais de service, selon la méthode)_"
