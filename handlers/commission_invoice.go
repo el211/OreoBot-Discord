@@ -705,8 +705,9 @@ func handleInvoiceLangButton(s *discordgo.Session, i *discordgo.InteractionCreat
 	_ = s.InteractionRespond(i.Interaction, &discordgo.InteractionResponse{
 		Type: discordgo.InteractionResponseChannelMessageWithSource,
 		Data: &discordgo.InteractionResponseData{
-			Embeds: []*discordgo.MessageEmbed{renderInvoiceEmbed(storage.Cfg, *found, code)},
-			Flags:  discordgo.MessageFlagsEphemeral,
+			Embeds:     []*discordgo.MessageEmbed{renderInvoiceEmbed(storage.Cfg, *found, code)},
+			Components: buttonRows(invoiceButtonsFromRecord(storage.Cfg, *found, code)),
+			Flags:      discordgo.MessageFlagsEphemeral,
 		},
 	})
 }
@@ -715,12 +716,63 @@ func handleInvoiceLangButton(s *discordgo.Session, i *discordgo.InteractionCreat
 // PayPal/Stripe buttons. Crypto has no hosted checkout URL, so clicking it opens
 // an ephemeral panel with QR codes and addresses instead.
 func cryptoPayButton(invNum int) discordgo.Button {
+	return cryptoPayButtonL(invNum, lang.ActiveLanguage())
+}
+
+// cryptoPayButtonL is the language-aware variant of cryptoPayButton.
+func cryptoPayButtonL(invNum int, code string) discordgo.Button {
 	return discordgo.Button{
-		Label:    lang.T("invoice_crypto_button"),
+		Label:    lang.TL(code, "invoice_crypto_button"),
 		Style:    discordgo.SecondaryButton,
 		CustomID: fmt.Sprintf("invoice_crypto:%d", invNum),
 		Emoji:    &discordgo.ComponentEmoji{Name: "🪙"},
 	}
+}
+
+// invoiceButtonsFromRecord rebuilds the invoice's payment/crypto/language buttons
+// from the stored invoice (reusing already-created gateway URLs — it never calls
+// the payment APIs again). Used to re-render the invoice in another language.
+func invoiceButtonsFromRecord(cfg *config.Config, inv config.CommissionInvoice, code string) []discordgo.MessageComponent {
+	var btns []discordgo.MessageComponent
+	if inv.PayPalPayerURL != "" {
+		label := cfg.Payment.PayPal.ButtonLabel
+		if label == "" {
+			label = "PayPal"
+		}
+		btns = append(btns, discordgo.Button{Label: label, Style: discordgo.LinkButton, URL: inv.PayPalPayerURL, Emoji: &discordgo.ComponentEmoji{Name: "💳"}})
+	}
+	if inv.StripePaymentURL != "" {
+		label := cfg.Payment.Stripe.ButtonLabel
+		if label == "" {
+			label = "Stripe"
+		}
+		btns = append(btns, discordgo.Button{Label: label, Style: discordgo.LinkButton, URL: inv.StripePaymentURL, Emoji: &discordgo.ComponentEmoji{Name: "💳"}})
+	}
+	if inv.CoinbaseHostedURL != "" {
+		label := cfg.Payment.Coinbase.ButtonLabel
+		if label == "" {
+			label = "Coinbase"
+		}
+		btns = append(btns, discordgo.Button{Label: label, Style: discordgo.LinkButton, URL: inv.CoinbaseHostedURL, Emoji: &discordgo.ComponentEmoji{Name: "💳"}})
+	}
+	if len(inv.CoinbaseCryptoPayments) > 0 {
+		btns = append(btns, cryptoPayButtonL(inv.Number, code))
+	}
+	btns = append(btns, languageButtons(inv.Number)...)
+	return btns
+}
+
+// buttonRows chunks buttons into ActionsRows (max 5 buttons per row).
+func buttonRows(buttons []discordgo.MessageComponent) []discordgo.MessageComponent {
+	var rows []discordgo.MessageComponent
+	for start := 0; start < len(buttons); start += 5 {
+		end := start + 5
+		if end > len(buttons) {
+			end = len(buttons)
+		}
+		rows = append(rows, discordgo.ActionsRow{Components: buttons[start:end]})
+	}
+	return rows
 }
 
 // cryptoQRURL builds a QR image URL for a crypto payment. BTC uses a BIP21 URI
@@ -815,17 +867,9 @@ func buildInvoiceButtons(inv *config.CommissionInvoice, paypalMe string, amount 
 // buildInvoiceSend creates the MessageSend with the embed and button rows (max 5 per row).
 func buildInvoiceSend(content string, embed *discordgo.MessageEmbed, buttons []discordgo.MessageComponent) *discordgo.MessageSend {
 	send := &discordgo.MessageSend{
-		Content: content,
-		Embeds:  []*discordgo.MessageEmbed{embed},
-	}
-	for start := 0; start < len(buttons); start += 5 {
-		end := start + 5
-		if end > len(buttons) {
-			end = len(buttons)
-		}
-		send.Components = append(send.Components, discordgo.ActionsRow{
-			Components: buttons[start:end],
-		})
+		Content:    content,
+		Embeds:     []*discordgo.MessageEmbed{embed},
+		Components: buttonRows(buttons),
 	}
 	return send
 }
