@@ -51,7 +51,7 @@ func (h *Handler) scanImagesForScam(m *discordgo.Message, res scamResult) scamRe
 		if text == "" {
 			continue
 		}
-		sub := scanForScam(text, m.MentionEveryone, cfg.ExtraDomains, cfg.ExtraKeywords)
+		sub := scanForScam(text, m.MentionEveryone, cfg.ExtraDomains, cfg.ExtraKeywords, cfg.BlockLookalikes)
 		if sub.score > 0 {
 			res.score += sub.score
 			for _, r := range sub.reasons {

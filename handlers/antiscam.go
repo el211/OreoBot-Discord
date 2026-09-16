@@ -51,7 +51,7 @@ type scamResult struct {
 // scanForScam scores text for scam signals. A known phishing domain is an
 // instant, high-confidence hit; scam phrases add up; @everyone paired with a
 // link is a classic bait pattern.
-func scanForScam(text string, mentionsEveryone bool, extraDomains, extraKeywords []string) scamResult {
+func scanForScam(text string, mentionsEveryone bool, extraDomains, extraKeywords []string, checkLookalikes bool) scamResult {
 	res := scamResult{}
 	lower := strings.ToLower(text)
 
@@ -65,6 +65,9 @@ func scanForScam(text string, mentionsEveryone bool, extraDomains, extraKeywords
 		if isPhishingDomain(host, extraDomains) {
 			res.score += 3
 			res.reasons = append(res.reasons, "phishing domain: "+host)
+		} else if checkLookalikes && isLookalikeDomain(host) {
+			res.score += 3
+			res.reasons = append(res.reasons, "lookalike domain: "+host)
 		}
 	}
 	if inv := inviteRe.FindString(text); inv != "" {
@@ -109,7 +112,7 @@ func (h *Handler) handleAntiScamMessage(s *discordgo.Session, m *discordgo.Messa
 	}
 
 	cfg := h.cfg.AntiScam
-	res := scanForScam(m.Content, m.MentionEveryone, cfg.ExtraDomains, cfg.ExtraKeywords)
+	res := scanForScam(m.Content, m.MentionEveryone, cfg.ExtraDomains, cfg.ExtraKeywords, cfg.BlockLookalikes)
 
 	// Optional: scan image attachments for scam text.
 	res = h.scanImagesForScam(m.Message, res)
