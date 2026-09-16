@@ -7,6 +7,7 @@ import (
 	"time"
 
 	"discord-bot/config"
+	"discord-bot/lang"
 	"discord-bot/storage"
 
 	"github.com/bwmarrin/discordgo"
@@ -122,9 +123,10 @@ func (h *Handler) handleAntiScamMessage(s *discordgo.Session, m *discordgo.Messa
 
 	warn := cfg.Message
 	if warn == "" {
-		warn = "⚠️ {user}, your message was removed for looking like a scam. If this was a mistake, contact a moderator."
+		warn = lang.T("antiscam_warning", "user", "<@"+m.Author.ID+">")
+	} else {
+		warn = strings.ReplaceAll(warn, "{user}", "<@"+m.Author.ID+">")
 	}
-	warn = strings.ReplaceAll(warn, "{user}", "<@"+m.Author.ID+">")
 	sendTemp(s, m.ChannelID, warn, 8)
 
 	if cfg.TimeoutMinutes > 0 {

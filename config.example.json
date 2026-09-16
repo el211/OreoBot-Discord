@@ -118,6 +118,20 @@
     "message": "{user} You are not allowed to post links here."
   },
 
+  "anti_scam": {
+    "enabled": false,
+    "score_threshold": 2,
+    "timeout_minutes": 0,
+    "extra_domains": [],
+    "extra_keywords": [],
+    "message": "⚠️ {user}, your message was removed for looking like a scam. If this was a mistake, contact a moderator.",
+    "ocr": {
+      "enabled": false,
+      "api_key": "PUT_OCR_SPACE_API_KEY_HERE",
+      "max_image_bytes": 3145728
+    }
+  },
+
   "tickets": {
     "enabled": false,
     "panel_channel": "PUT_TICKET_PANEL_CHANNEL_ID_HERE",
