@@ -125,6 +125,16 @@
     "extra_domains": [],
     "extra_keywords": [],
     "message": "⚠️ {user}, your message was removed for looking like a scam. If this was a mistake, contact a moderator.",
+    "block_lookalikes": true,
+    "protect_new_accounts": true,
+    "new_account_days": 7,
+    "feed": {
+      "enabled": true,
+      "urls": [
+        "https://raw.githubusercontent.com/Discord-AntiScam/scam-links/main/list.json"
+      ],
+      "refresh_minutes": 360
+    },
     "ocr": {
       "enabled": false,
       "api_key": "PUT_OCR_SPACE_API_KEY_HERE",
