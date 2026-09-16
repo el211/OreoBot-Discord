@@ -86,13 +86,6 @@ func scanForScam(text string, mentionsEveryone bool, extraDomains, extraKeywords
 	return res
 }
 
-// scanImagesForScam scans image attachments for scam text via OCR and folds any
-// findings into res. OCR is optional; when disabled this returns res unchanged.
-// The real implementation lives in scam_ocr.go.
-func (h *Handler) scanImagesForScam(m *discordgo.Message, res scamResult) scamResult {
-	return res
-}
-
 // RegisterAntiScam attaches the scam-detection message handler.
 func (h *Handler) RegisterAntiScam(s *discordgo.Session) {
 	if !h.cfg.AntiScam.Enabled {
