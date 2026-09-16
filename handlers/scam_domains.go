@@ -72,6 +72,9 @@ func isPhishingDomain(host string, extra []string) bool {
 	if matchesDomain(host, phishingSet, nil) {
 		return true
 	}
+	if feedContains(host) {
+		return true
+	}
 	if len(extra) > 0 {
 		norm := make([]string, 0, len(extra))
 		for _, e := range extra {
