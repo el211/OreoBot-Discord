@@ -23,6 +23,7 @@ type Config struct {
 	CountingGame   CountingGameConfig    `json:"counting_game"`
 	NoPing         NoPingConfig          `json:"no_ping"`
 	LinkFilter     LinkFilterConfig      `json:"link_filter"`
+	AntiScam       AntiScamConfig        `json:"anti_scam"`
 	Verify         VerifyConfig          `json:"verify"`
 	CustomCommands []CustomCommandConfig `json:"custom_commands"`
 
@@ -230,6 +231,67 @@ func (c *LinkFilterConfig) UnmarshalJSON(data []byte) error {
 	}
 	*c = LinkFilterConfig(tmp)
 	return nil
+}
+
+// AntiScamConfig configures Frostbite-style scam detection: a phishing-domain
+// blocklist, scam-phrase heuristics, and optional image (OCR) scanning. When a
+// message scores at or above ScoreThreshold it is treated as a scam: deleted,
+// logged to the mod-log, and (optionally) the author is timed out.
+type AntiScamConfig struct {
+	// Enabled turns scam detection on.
+	Enabled bool `json:"enabled"`
+
+	// ScoreThreshold is the minimum score a message must reach to be treated as
+	// a scam. A known phishing domain scores high on its own. Default 2.
+	ScoreThreshold int `json:"score_threshold"`
+
+	// TimeoutMinutes times the author out for this many minutes when a scam is
+	// detected. 0 disables the timeout (message is still deleted + logged).
+	TimeoutMinutes int `json:"timeout_minutes"`
+
+	// ExtraDomains adds domains to the built-in phishing blocklist.
+	ExtraDomains []string `json:"extra_domains"`
+
+	// ExtraKeywords adds phrases to the built-in scam-phrase list. Matched
+	// case-insensitively as substrings.
+	ExtraKeywords []string `json:"extra_keywords"`
+
+	// Message is sent (temporarily) in-channel when a scam is removed.
+	// Use {user} for the offender's mention. A default is used if empty.
+	Message string `json:"message"`
+
+	// OCR scans image attachments for scam text.
+	OCR OCRConfig `json:"ocr"`
+}
+
+// OCRConfig configures optional image text extraction used by the anti-scam
+// system. It uses the ocr.space HTTP API so no native dependency is required.
+type OCRConfig struct {
+	// Enabled turns image scanning on. Requires APIKey.
+	Enabled bool `json:"enabled"`
+
+	// APIKey is an ocr.space API key. A free key works for low volume.
+	APIKey string `json:"api_key"`
+
+	// MaxImageBytes caps the size of an image fetched for OCR. Default 3 MiB.
+	MaxImageBytes int64 `json:"max_image_bytes"`
+}
+
+// EffectiveAntiScamScore returns the configured score threshold, or the
+// built-in default (2) when unset.
+func (c AntiScamConfig) EffectiveScoreThreshold() int {
+	if c.ScoreThreshold <= 0 {
+		return 2
+	}
+	return c.ScoreThreshold
+}
+
+// EffectiveMaxImageBytes returns the OCR image size cap, or 3 MiB by default.
+func (c OCRConfig) EffectiveMaxImageBytes() int64 {
+	if c.MaxImageBytes <= 0 {
+		return 3 << 20
+	}
+	return c.MaxImageBytes
 }
 
 // CountingGameConfig configures the counting minigame channel.
