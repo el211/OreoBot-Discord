@@ -117,6 +117,15 @@ func (h *Handler) handleAntiScamMessage(s *discordgo.Session, m *discordgo.Messa
 	// Optional: scan image attachments for scam text.
 	res = h.scanImagesForScam(m.Message, res)
 
+	// Account-risk signals only reinforce an existing suspicion — they never
+	// flag a message on their own, so legitimate new members aren't punished.
+	if cfg.ProtectNewAccounts && res.score > 0 {
+		if s, reasons := accountRiskSignals(m.Author, cfg.EffectiveNewAccountDays()); s > 0 {
+			res.score += s
+			res.reasons = append(res.reasons, reasons...)
+		}
+	}
+
 	if res.score < cfg.EffectiveScoreThreshold() {
 		return
 	}
