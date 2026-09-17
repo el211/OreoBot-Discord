@@ -23,6 +23,7 @@ type Config struct {
 	CountingGame   CountingGameConfig    `json:"counting_game"`
 	NoPing         NoPingConfig          `json:"no_ping"`
 	LinkFilter     LinkFilterConfig      `json:"link_filter"`
+	AntiScam       AntiScamConfig        `json:"anti_scam"`
 	Verify         VerifyConfig          `json:"verify"`
 	CustomCommands []CustomCommandConfig `json:"custom_commands"`
 
@@ -230,6 +231,126 @@ func (c *LinkFilterConfig) UnmarshalJSON(data []byte) error {
 	}
 	*c = LinkFilterConfig(tmp)
 	return nil
+}
+
+// AntiScamConfig configures Frostbite-style scam detection: a phishing-domain
+// blocklist, scam-phrase heuristics, and optional image (OCR) scanning. When a
+// message scores at or above ScoreThreshold it is treated as a scam: deleted,
+// logged to the mod-log, and (optionally) the author is timed out.
+type AntiScamConfig struct {
+	// Enabled turns scam detection on.
+	Enabled bool `json:"enabled"`
+
+	// ScoreThreshold is the minimum score a message must reach to be treated as
+	// a scam. A known phishing domain scores high on its own. Default 2.
+	ScoreThreshold int `json:"score_threshold"`
+
+	// TimeoutMinutes times the author out for this many minutes when a scam is
+	// detected. 0 disables the timeout (message is still deleted + logged).
+	TimeoutMinutes int `json:"timeout_minutes"`
+
+	// ExtraDomains adds domains to the built-in phishing blocklist.
+	ExtraDomains []string `json:"extra_domains"`
+
+	// ExtraKeywords adds phrases to the built-in scam-phrase list. Matched
+	// case-insensitively as substrings.
+	ExtraKeywords []string `json:"extra_keywords"`
+
+	// Message is sent (temporarily) in-channel when a scam is removed.
+	// Use {user} for the offender's mention. A default is used if empty.
+	Message string `json:"message"`
+
+	// BlockLookalikes flags domains that impersonate protected brands via typos
+	// or homoglyphs (e.g. "d1scord.gg", "discocrd.com") even when not on any
+	// blocklist. Default false.
+	BlockLookalikes bool `json:"block_lookalikes"`
+
+	// ProtectNewAccounts adds to a message's scam score when the author is a
+	// very new account or has no avatar (only when other scam signals exist, so
+	// legitimate new members are not punished on their own).
+	ProtectNewAccounts bool `json:"protect_new_accounts"`
+
+	// NewAccountDays is the age (in days) below which an account is considered
+	// "new" for ProtectNewAccounts. Default 7.
+	NewAccountDays int `json:"new_account_days"`
+
+	// Feed auto-syncs community phishing-domain lists.
+	Feed FeedConfig `json:"feed"`
+
+	// OCR scans image attachments for scam text.
+	OCR OCRConfig `json:"ocr"`
+}
+
+// FeedConfig configures automatic syncing of community phishing-domain lists
+// (e.g. the Discord-AntiScam list or Sinking Yachts). Fetched domains are
+// merged into the built-in blocklist in memory and refreshed on a schedule.
+type FeedConfig struct {
+	// Enabled turns feed syncing on.
+	Enabled bool `json:"enabled"`
+
+	// URLs are the phishing lists to fetch. Each must return either a JSON array
+	// of domain strings or a newline-separated plain-text list. When empty, a
+	// built-in default set is used.
+	URLs []string `json:"urls"`
+
+	// RefreshMinutes is how often to re-fetch the lists. Default 360 (6h).
+	RefreshMinutes int `json:"refresh_minutes"`
+}
+
+// EffectiveNewAccountDays returns the new-account age threshold, default 7.
+func (c AntiScamConfig) EffectiveNewAccountDays() int {
+	if c.NewAccountDays <= 0 {
+		return 7
+	}
+	return c.NewAccountDays
+}
+
+// EffectiveRefreshMinutes returns the feed refresh interval, default 360.
+func (c FeedConfig) EffectiveRefreshMinutes() int {
+	if c.RefreshMinutes <= 0 {
+		return 360
+	}
+	return c.RefreshMinutes
+}
+
+// EffectiveURLs returns the configured feed URLs, or a built-in default set.
+func (c FeedConfig) EffectiveURLs() []string {
+	if len(c.URLs) > 0 {
+		return c.URLs
+	}
+	return []string{
+		"https://raw.githubusercontent.com/Discord-AntiScam/scam-links/main/list.json",
+	}
+}
+
+// OCRConfig configures optional image text extraction used by the anti-scam
+// system. It uses the ocr.space HTTP API so no native dependency is required.
+type OCRConfig struct {
+	// Enabled turns image scanning on. Requires APIKey.
+	Enabled bool `json:"enabled"`
+
+	// APIKey is an ocr.space API key. A free key works for low volume.
+	APIKey string `json:"api_key"`
+
+	// MaxImageBytes caps the size of an image fetched for OCR. Default 3 MiB.
+	MaxImageBytes int64 `json:"max_image_bytes"`
+}
+
+// EffectiveAntiScamScore returns the configured score threshold, or the
+// built-in default (2) when unset.
+func (c AntiScamConfig) EffectiveScoreThreshold() int {
+	if c.ScoreThreshold <= 0 {
+		return 2
+	}
+	return c.ScoreThreshold
+}
+
+// EffectiveMaxImageBytes returns the OCR image size cap, or 3 MiB by default.
+func (c OCRConfig) EffectiveMaxImageBytes() int64 {
+	if c.MaxImageBytes <= 0 {
+		return 3 << 20
+	}
+	return c.MaxImageBytes
 }
 
 // CountingGameConfig configures the counting minigame channel.

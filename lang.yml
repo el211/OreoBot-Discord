@@ -254,6 +254,7 @@ en:
 
   # ── Link filter ──────────────────────────────────────────
   linkfilter_warning: "{user} You are not allowed to post links here."
+  antiscam_warning: "⚠️ {user}, your message was removed for looking like a scam. If this was a mistake, contact a moderator."
 
   # ── Invoices / payments ──────────────────────────────────
   invoice_embed_title:       "🧾 Invoice #{number}"
@@ -555,6 +556,7 @@ fr:
 
   # ── Filtre de liens ──────────────────────────────────────
   linkfilter_warning: "{user} Vous n'êtes pas autorisé à publier des liens ici."
+  antiscam_warning: "⚠️ {user}, votre message a été supprimé car il ressemble à une arnaque. En cas d'erreur, contactez un modérateur."
 
   # ── Factures / paiements ─────────────────────────────────
   invoice_embed_title:       "🧾 Facture #{number}"

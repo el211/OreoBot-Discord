@@ -132,6 +132,10 @@ func (h *Handler) handleLinkFilterMessage(s *discordgo.Session, m *discordgo.Mes
 		return
 	}
 
+	// Download any attachments BEFORE deleting so they can be preserved in the
+	// mod-log — Discord CDN URLs die shortly after the message is removed.
+	archived := downloadAttachments(m.Message)
+
 	if h.cfg.LinkFilter.DeleteMessage {
 		_ = s.ChannelMessageDelete(m.ChannelID, m.ID)
 	}
@@ -144,7 +148,7 @@ func (h *Handler) handleLinkFilterMessage(s *discordgo.Session, m *discordgo.Mes
 	}
 	sendTemp(s, m.ChannelID, warn, 8)
 
-	logLinkFilter(s, m.Message, sample)
+	logLinkFilter(s, m.Message, sample, archived)
 }
 
 // findBlockedLink reports whether content contains a link that is not permitted.
@@ -210,7 +214,7 @@ func hostWhitelisted(host string, whitelist []string) bool {
 	return false
 }
 
-func logLinkFilter(s *discordgo.Session, m *discordgo.Message, link string) {
+func logLinkFilter(s *discordgo.Session, m *discordgo.Message, link string, archived []archivedAttachment) {
 	gs := storage.GetGuild(m.GuildID)
 	logCh := config.EffectiveModLogChannel(storage.Cfg, gs)
 	if logCh == "" {
@@ -218,23 +222,36 @@ func logLinkFilter(s *discordgo.Session, m *discordgo.Message, link string) {
 	}
 
 	content := m.Content
-	if len(content) > 1024 {
+	if content == "" {
+		content = "*(no text)*"
+	} else if len(content) > 1024 {
 		content = content[:1021] + "..."
 	}
 
+	fields := []*discordgo.MessageEmbedField{
+		{Name: "Author", Value: fmt.Sprintf("<@%s> - %s (`%s`)", m.Author.ID, m.Author.Username, m.Author.ID)},
+		{Name: "Channel", Value: fmt.Sprintf("<#%s>", m.ChannelID), Inline: true},
+		{Name: "Blocked Link", Value: link, Inline: true},
+		{Name: "Message Content", Value: content},
+	}
+	if len(archived) > 0 {
+		fields = append(fields, &discordgo.MessageEmbedField{
+			Name:  "Attachments",
+			Value: fmt.Sprintf("%d preserved below", len(archived)),
+		})
+	}
+
 	embed := &discordgo.MessageEmbed{
-		Title: "Link Filter: Message Deleted",
-		Color: 0xFFA500,
-		Fields: []*discordgo.MessageEmbedField{
-			{Name: "Author", Value: fmt.Sprintf("<@%s> - %s (`%s`)", m.Author.ID, m.Author.Username, m.Author.ID)},
-			{Name: "Channel", Value: fmt.Sprintf("<#%s>", m.ChannelID), Inline: true},
-			{Name: "Blocked Link", Value: link, Inline: true},
-			{Name: "Message Content", Value: content},
-		},
+		Title:     "Link Filter: Message Deleted",
+		Color:     0xFFA500,
+		Fields:    fields,
 		Footer:    &discordgo.MessageEmbedFooter{Text: fmt.Sprintf("Message ID: %s", m.ID)},
 		Timestamp: time.Now().Format(time.RFC3339),
 	}
-	_, _ = s.ChannelMessageSendEmbed(logCh, embed)
+	_, _ = s.ChannelMessageSendComplex(logCh, &discordgo.MessageSend{
+		Embed: embed,
+		Files: asDiscordFiles(archived),
+	})
 }
 
 // ──────────────────────────────────────────

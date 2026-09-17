@@ -87,6 +87,8 @@ func run() {
 	h.RegisterWelcomeLeave(b.Session)
 	h.RegisterNoPing(b.Session)
 	h.RegisterLinkFilter(b.Session)
+	h.RegisterAntiScam(b.Session)
+	h.StartPhishingFeed()
 	h.RegisterCounting(b.Session)
 	h.RegisterCustomCommands()
 	h.RegisterInviteTracker(b.Session)
